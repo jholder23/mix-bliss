@@ -72,7 +72,7 @@ vec3 studioEnv(vec3 dir) {
 }
 
 vec2 xzToUv(vec2 xz) {
-  return vec2(xz.x / (trayR * 2.0) + 0.5, xz.z / (trayR * 2.0) + 0.5);
+  return vec2(xz.x / (trayR * 2.0) + 0.5, xz.y / (trayR * 2.0) + 0.5);
 }
 
 float bowlY(vec2 xz) {
@@ -243,16 +243,8 @@ export function createPaintMaterial(scene: Scene, _software = false): ShaderMate
   mat.onError = (_effect, errors) => {
     const el = document.querySelector('#hint')
     if (el) {
-      el.textContent = errors.slice(0, 280)
+      el.textContent = errors.slice(0, 220)
       el.classList.remove('gone')
-    }
-    const fail = document.querySelector('#fail')
-    if (fail instanceof HTMLElement) {
-      fail.hidden = false
-      fail.replaceChildren()
-      const p = document.createElement('p')
-      p.textContent = errors
-      fail.append(p)
     }
   }
   return mat
