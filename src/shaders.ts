@@ -509,7 +509,7 @@ void main() {
   float dy = (bl + 2.0 * b + br) - (tl + 2.0 * t + tr);
   float relief = 7.5 + h * 4.0;
   vec3 N = normalize(vec3(-dx * relief, -dy * relief, 1.15));
-  N.z = max(N.z, 0.42);
+  N.z = max(N.z, 0.55);
   N = normalize(N);
 
   float grain = (fbm(vUv * vec2(uAspect, 1.0) * 90.0 + 8.0) - 0.5);
@@ -576,8 +576,11 @@ void main() {
   coat *= F_Schlick(NdotV, vec3(0.1)).x;
   color += coat * vec3(1.2, 1.18, 1.12) * (0.45 + 1.6 * uGloss) * thick;
 
-  color *= mix(1.0, cavity, 0.28);
-  color = mix(pigment * 0.92, color, 0.55 + 0.45 * body);
+  color *= mix(1.0, cavity, 0.18);
+  float pLuma = dot(pigment, vec3(0.299, 0.587, 0.114));
+  float floorAmt = mix(0.62, 0.88, clamp(pLuma, 0.0, 1.0));
+  color = max(color, pigment * floorAmt);
+  color = mix(pigment, color, 0.42 + 0.35 * body);
 
   vec2 flow = texture(uVelocity, vUv).xy;
   float flowLen = length(flow);
@@ -602,7 +605,7 @@ void main() {
       }
     }
   }
-  color *= occlude;
+  color *= mix(1.0, occlude, 0.25);
 
   float nPaper = 0.90 + 0.08 * fbm(vUv * vec2(uAspect, 1.0) * 52.0);
   float grit = 0.97 + 0.03 * fbm(vUv * vec2(uAspect, 1.0) * 140.0);

@@ -7,7 +7,7 @@ export const TUBES: Tube[] = [
   { name: 'Cadmium Red', hex: '#d42a1e' },
   { name: 'Quinacridone Magenta', hex: '#c2185b' },
   { name: 'Naples Yellow', hex: '#e8c547' },
-  { name: 'Hansa Yellow', hex: '#f0d030' },
+  { name: 'Hansa Yellow', hex: '#ffd84a' },
   { name: 'Ultramarine', hex: '#2a4bd7' },
   { name: 'Cerulean', hex: '#3d9ad1' },
   { name: 'Phthalo Green', hex: '#0b6e56' },
