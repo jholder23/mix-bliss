@@ -196,8 +196,33 @@ body {
 
 .tools {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 0.35rem;
+}
+
+.shots {
+  position: fixed;
+  top: max(1.1rem, env(safe-area-inset-top));
+  right: 1.1rem;
+  z-index: 4;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  max-width: min(22rem, 46vw);
+}
+
+.shot {
+  font: inherit;
+  font-size: 0.78rem;
+  color: var(--ink);
+  background: rgba(18, 13, 10, 0.55);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.38rem 0.7rem;
+  min-height: 2.1rem;
+  cursor: pointer;
+  backdrop-filter: blur(12px);
 }
 
 .tool {
@@ -274,5 +299,10 @@ button.toggle.on {
     left: 1.2rem;
     transform: none;
     top: 1.2rem;
+  }
+
+  .shots {
+    top: 1.2rem;
+    right: 1.2rem;
   }
 }

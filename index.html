@@ -13,9 +13,9 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta
       name="description"
-      content="Glop a tube of wet paint onto a blank tray, then fold it with a finger, knife, or stick."
+      content="3D wet-paint mixer in a game engine. Orbit the tray any way you want, glop true-color oil, then fold it."
     />
-    <title>Impasto — wet paint mixer</title>
+    <title>Impasto — 3D wet paint</title>
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
@@ -25,7 +25,9 @@
       <p>This mixer needs WebGL2, which this browser does not provide. Try a current mobile Safari, Chrome, or Firefox.</p>
     </div>
 
-    <p id="hint" class="hint">Pick a color. Tap to dump that color. Other tools only mix.</p>
+    <p id="hint" class="hint">Pick a color, glop a mound, then orbit. Right-drag looks around. Mix tools never dump paint.</p>
+
+    <div id="shots" class="shots" role="toolbar" aria-label="Camera angles"></div>
 
     <aside class="tray" aria-label="Paint controls">
       <header class="brand">
@@ -42,6 +44,7 @@
         <button id="tool-finger" class="tool" type="button" aria-pressed="false">Finger</button>
         <button id="tool-knife" class="tool" type="button" aria-pressed="false">Knife</button>
         <button id="tool-stick" class="tool" type="button" aria-pressed="false">Stick</button>
+        <button id="tool-look" class="tool" type="button" aria-pressed="false">Look</button>
       </div>
 
       <label class="slider">

@@ -1,9 +1,11 @@
+import { PointerEventTypes, ShaderMaterial, Vector3 } from '@babylonjs/core'
 import { MixAudio } from './audio'
-import { PaintEngine } from './engine'
-import { TUBES, feelFromViscosity, hexToRgb, viscosityName } from './paints'
+import { PaintFluid } from './fluid'
+import { SHOTS, createStudio } from './studio'
+import { TUBES, hexToRgb, simFromViscosity, viscosityName } from './paints'
 import type { Tube } from './paints'
 
-type Tool = 'glop' | 'finger' | 'knife' | 'stick'
+type Tool = 'glop' | 'finger' | 'knife' | 'stick' | 'look'
 
 function must<T>(el: T | null, name: string): T {
   if (!el) throw new Error(`Missing ${name}`)
@@ -21,46 +23,40 @@ const sizeLabel = must(document.querySelector<HTMLElement>('#size-label'), 'size
 const tubeName = must(document.querySelector<HTMLParagraphElement>('#tube-name'), 'tube-name')
 const scrapeBtn = must(document.querySelector<HTMLButtonElement>('#scrape'), 'scrape')
 const soundBtn = must(document.querySelector<HTMLButtonElement>('#sound'), 'sound')
-const toolButtons = {
+const shotsEl = must(document.querySelector<HTMLDivElement>('#shots'), 'shots')
+const toolButtons: Record<Tool, HTMLButtonElement> = {
   glop: must(document.querySelector<HTMLButtonElement>('#tool-glop'), 'glop'),
   finger: must(document.querySelector<HTMLButtonElement>('#tool-finger'), 'finger'),
   knife: must(document.querySelector<HTMLButtonElement>('#tool-knife'), 'knife'),
   stick: must(document.querySelector<HTMLButtonElement>('#tool-stick'), 'stick'),
+  look: must(document.querySelector<HTMLButtonElement>('#tool-look'), 'look'),
 }
 
-let engine: PaintEngine
+let studio: ReturnType<typeof createStudio>
 try {
-  engine = new PaintEngine(canvas, feelFromViscosity(0.72))
+  studio = createStudio(canvas)
 } catch (err) {
   fail.hidden = false
-  const detail = err instanceof Error ? err.message : 'WebGL2 unavailable'
-  fail.replaceChildren()
   const p = document.createElement('p')
-  p.textContent = detail
-  fail.append(p)
+  p.textContent = err instanceof Error ? err.message : 'WebGL2 unavailable'
+  fail.replaceChildren(p)
   throw err
 }
 
+const { engine, scene, camera, tray, software, lookTo, setToolGhost, setLeftOrbit } = studio
 const audio = new MixAudio()
 let viscosity = 0.72
-let feel = feelFromViscosity(viscosity)
+let feel = simFromViscosity(viscosity)
+const fluid = new PaintFluid(scene, feel, software)
+fluid.setLights(new Vector3(-0.35, -1.15, -0.28), new Vector3(0.2, -1, 0.35), new Vector3(0.55, 0.35, -0.45))
+
 let selected: Tube = TUBES[0] ?? { name: 'Cadmium Red', hex: '#d42a1e' }
 let tool: Tool = 'glop'
 let size = 0.52
 let customHex = '#7a3cff'
-
-type Stroke = {
-  id: number
-  prev: [number, number] | null
-  moved: number
-  started: number
-  lastDump: [number, number]
-  dir: [number, number]
-}
-
-const strokes = new Map<number, Stroke>()
-let light: [number, number] = [0.42, 0.68]
-let lastFrame = performance.now()
+let lastDump: Vector3 | null = null
+let prevPick: Vector3 | null = null
+let stirring = false
 
 function sizeName(t: number): string {
   if (t < 0.34) return 'Dab'
@@ -70,40 +66,9 @@ function sizeName(t: number): string {
 }
 
 function toolRadius(): number {
-  if (tool === 'stick') return feel.fingerRadius * 0.32 * (0.55 + size)
-  if (tool === 'knife') return feel.fingerRadius * 0.82 * (0.65 + size * 0.45)
-  if (tool === 'glop') return feel.dyeRadius * (0.42 + size * 0.88)
-  return feel.fingerRadius * (0.62 + size * 0.55)
-}
-
-function toUv(event: PointerEvent): [number, number] {
-  const rect = canvas.getBoundingClientRect()
-  const x = (event.clientX - rect.left) / rect.width
-  const y = 1 - (event.clientY - rect.top) / rect.height
-  return [x, y]
-}
-
-function glopAt(uv: [number, number], strength: number): void {
-  engine.splatPaint(uv, hexToRgb(selected.hex), toolRadius(), strength)
-}
-
-function mixAt(uv: [number, number], delta: [number, number], steps: number): void {
-  const radius = toolRadius()
-  const depthScale = tool === 'knife' ? 0.58 : tool === 'stick' ? 0.2 : 0.34
-  const pushScale = tool === 'knife' ? 0.16 : tool === 'stick' ? 0.95 : 0.72
-  const dragScale = tool === 'knife' ? 0.55 : 0.62
-  const depth = (feel.fingerDepth * depthScale) / steps
-  const push = (feel.fingerPush * pushScale) / steps
-  const drag = feel.splatForce * dragScale
-  if (tool === 'knife') {
-    const len = radius * 0.82
-    const width = radius * 0.16
-    engine.displaceBlade(uv, delta, len, width, depth)
-    engine.nudgeBlade(uv, delta, delta, len, width, push, drag)
-    return
-  }
-  engine.displaceHeight(uv, radius, depth)
-  engine.nudgeRadial(uv, delta, radius, push, drag)
+  if (tool === 'stick') return 0.28 + size * 0.18
+  if (tool === 'knife') return 0.55 + size * 0.4
+  return 0.42 + size * 0.45
 }
 
 function setTool(next: Tool): void {
@@ -113,8 +78,11 @@ function setTool(next: Tool): void {
     btn.classList.toggle('on', on)
     btn.setAttribute('aria-pressed', on ? 'true' : 'false')
   }
-  tubeName.textContent =
-    next === 'glop' ? `${selected.name} ready to glop.` : `${next} folds paint. It does not dump color.`
+  if (next === 'glop') tubeName.textContent = `${selected.name} ready to glop.`
+  else if (next === 'look') tubeName.textContent = 'Look: drag any direction. Right-drag always orbits.'
+  else tubeName.textContent = `${next} folds paint. It does not dump color.`
+  canvas.style.cursor = next === 'look' ? 'grab' : 'crosshair'
+  setLeftOrbit(next === 'look')
 }
 
 function renderSwatches(): void {
@@ -134,7 +102,6 @@ function renderSwatches(): void {
     })
     swatchesEl.append(btn)
   }
-
   const wrap = document.createElement('label')
   wrap.className = 'swatch custom'
   wrap.title = 'Custom color'
@@ -157,90 +124,86 @@ function renderSwatches(): void {
   if (tool === 'glop') tubeName.textContent = `${selected.name} ready to glop.`
 }
 
-function applyViscosity(raw: number): void {
-  viscosity = raw
-  feel = feelFromViscosity(viscosity)
-  engine.setFeel(feel)
-  viscLabel.textContent = viscosityName(viscosity)
-  audio.setViscosity(viscosity)
+function renderShots(): void {
+  shotsEl.replaceChildren()
+  for (const shot of SHOTS) {
+    const btn = document.createElement('button')
+    btn.type = 'button'
+    btn.className = 'shot'
+    btn.textContent = shot.label
+    btn.addEventListener('click', () => {
+      lookTo(shot)
+      hint.classList.add('gone')
+    })
+    shotsEl.append(btn)
+  }
+}
+
+function pickTray(px: number, py: number): Vector3 | null {
+  const hit = scene.pick(px, py, (m) => m === tray)
+  if (hit?.hit && hit.pickedPoint) return hit.pickedPoint.clone()
+  const ray = scene.createPickingRay(px, py, null, camera)
+  const n = new Vector3(0, 1, 0)
+  const denom = Vector3.Dot(ray.direction, n)
+  if (Math.abs(denom) < 1e-5) return null
+  const dist = Vector3.Dot(new Vector3(0, 0.08, 0).subtract(ray.origin), n) / denom
+  if (dist < 0) return null
+  return ray.origin.add(ray.direction.scale(dist))
 }
 
 function hideHint(): void {
   hint.classList.add('gone')
 }
 
-canvas.addEventListener('pointerdown', (event) => {
-  event.preventDefault()
-  canvas.setPointerCapture(event.pointerId)
-  const uv = toUv(event)
-  light = uv
-  strokes.set(event.pointerId, {
-    id: event.pointerId,
-    prev: uv,
-    moved: 0,
-    started: performance.now(),
-    lastDump: uv,
-    dir: [1, 0],
-  })
-  canvas.style.cursor = 'none'
-  if (tool === 'glop') {
-    glopAt(uv, 1.7 + size * 0.95)
-    audio.blob()
-    if (navigator.vibrate) navigator.vibrate(8)
-  }
-  hideHint()
-})
+scene.onPointerObservable.add((info) => {
+  const evt = info.event
+  if ('button' in evt && evt.button !== 0) return
+  if (tool === 'look') return
 
-canvas.addEventListener('pointermove', (event) => {
-  if (!strokes.has(event.pointerId)) return
-  event.preventDefault()
-  const stroke = strokes.get(event.pointerId)
-  if (!stroke) return
-  const uv = toUv(event)
-  light = uv
-  if (stroke.prev) {
-    const dx = uv[0] - stroke.prev[0]
-    const dy = uv[1] - stroke.prev[1]
-    const dist = Math.hypot(dx, dy)
-    stroke.moved += dist
-    if (dist > 1e-5) stroke.dir = [dx, dy]
-    const radius = toolRadius()
-    const steps = Math.max(1, Math.ceil(dist / (radius * 0.28)))
+  if (info.type === PointerEventTypes.POINTERDOWN) {
+    const at = pickTray(scene.pointerX, scene.pointerY)
+    if (!at) return
+    stirring = true
+    prevPick = at
+    hideHint()
     if (tool === 'glop') {
-      const gap = Math.hypot(uv[0] - stroke.lastDump[0], uv[1] - stroke.lastDump[1])
-      if (gap > toolRadius() * 0.85) {
-        glopAt(uv, 1.35 + size * 0.7)
-        stroke.lastDump = uv
+      fluid.glop(at, hexToRgb(selected.hex), size)
+      lastDump = at.clone()
+      audio.blob()
+    }
+  } else if (info.type === PointerEventTypes.POINTERMOVE && stirring) {
+    const at = pickTray(scene.pointerX, scene.pointerY)
+    if (!at || !prevPick) return
+    const delta = at.subtract(prevPick)
+    if (tool === 'glop') {
+      if (!lastDump || Vector3.Distance(at, lastDump) > 0.55 + size * 0.4) {
+        fluid.glop(at, hexToRgb(selected.hex), size * 0.85)
+        lastDump = at.clone()
         audio.blob()
       }
-    } else if (dist > 0.003) {
-      for (let i = 1; i <= steps; i++) {
-        const t = i / steps
-        const p: [number, number] = [stroke.prev[0] + dx * t, stroke.prev[1] + dy * t]
-        mixAt(p, [dx, dy], steps)
+    } else {
+      const dist = delta.length()
+      if (dist > 0.004) {
+        fluid.stir(at, delta, toolRadius(), tool)
+        audio.stir(dist * 8)
+        setToolGhost(tool === 'finger' ? 1 : tool === 'knife' ? 2 : 3, at, delta)
       }
-      audio.stir(dist * 22)
     }
+    prevPick = at
+  } else if (info.type === PointerEventTypes.POINTERUP) {
+    stirring = false
+    prevPick = null
+    setToolGhost(0, null, Vector3.Zero())
   }
-  stroke.prev = uv
 })
-
-function endStroke(event: PointerEvent): void {
-  strokes.delete(event.pointerId)
-  if (strokes.size === 0) canvas.style.cursor = 'crosshair'
-}
-
-canvas.addEventListener('pointerup', endStroke)
-canvas.addEventListener('pointercancel', endStroke)
-canvas.addEventListener('contextmenu', (event) => event.preventDefault())
 
 for (const name of Object.keys(toolButtons) as Tool[]) {
   toolButtons[name].addEventListener('click', () => setTool(name))
 }
 
 scrapeBtn.addEventListener('click', () => {
-  engine.scrape()
-  hint.textContent = 'Tray scraped. Pick a color and glop.'
+  fluid.scrape()
+  hint.textContent = 'Tray scraped. Pick a color and glop, or switch a camera angle.'
   hint.classList.remove('gone')
   setTool('glop')
 })
@@ -253,7 +216,12 @@ soundBtn.addEventListener('click', async () => {
 })
 
 viscosityEl.addEventListener('input', () => {
-  applyViscosity(Number(viscosityEl.value) / 100)
+  viscosity = Number(viscosityEl.value) / 100
+  feel = simFromViscosity(viscosity)
+  fluid.setFeel(feel)
+  viscLabel.textContent = viscosityName(viscosity)
+  audio.setViscosity(viscosity)
+  fluid.setGloss(feel.gloss)
 })
 
 sizeEl.addEventListener('input', () => {
@@ -261,51 +229,27 @@ sizeEl.addEventListener('input', () => {
   sizeLabel.textContent = sizeName(size)
 })
 
-window.addEventListener(
-  'touchmove',
-  (event) => {
-    event.preventDefault()
-  },
-  { passive: false },
-)
-
 window.addEventListener('resize', () => engine.resize())
 
-function frame(now: number): void {
-  const dt = Math.min(0.033, (now - lastFrame) / 1000)
-  lastFrame = now
-  const fingers: { uv: [number, number]; radius: number }[] = []
-  let overlayKind = 0
-  let overlayUv: [number, number] = [0, 0]
-  let overlayRadius = 0
-  let overlayDir: [number, number] = [1, 0]
-  if (tool === 'finger') {
-    for (const stroke of strokes.values()) {
-      if (stroke.prev) fingers.push({ uv: stroke.prev, radius: toolRadius() })
-    }
-  } else if (tool === 'knife' || tool === 'stick') {
-    for (const stroke of strokes.values()) {
-      if (!stroke.prev) continue
-      overlayKind = tool === 'knife' ? 2 : 3
-      overlayUv = stroke.prev
-      overlayRadius = toolRadius()
-      overlayDir = stroke.dir
-      break
-    }
+scene.onBeforeRenderObservable.add(() => {
+  const dt = Math.min(0.033, engine.getDeltaTime() / 1000)
+  fluid.step(dt)
+  fluid.setGloss(feel.gloss)
+  const mat = fluid.mesh.material
+  if (mat instanceof ShaderMaterial) {
+    mat.setVector3('cameraPosition', camera.position)
   }
-  engine.setFingers(fingers, hexToRgb(selected.hex))
-  engine.setTool(overlayKind, overlayUv, overlayRadius, overlayDir)
-  engine.step(dt)
-  engine.render(light, now * 0.001)
-  requestAnimationFrame(frame)
-}
+})
+
+engine.runRenderLoop(() => scene.render())
 
 renderSwatches()
-applyViscosity(Number(viscosityEl.value) / 100)
+renderShots()
+setTool('glop')
+viscLabel.textContent = viscosityName(viscosity)
 size = Number(sizeEl.value) / 100
 sizeLabel.textContent = sizeName(size)
-engine.resize()
-requestAnimationFrame(frame)
+fluid.setGloss(feel.gloss)
 
 const fontLink = document.createElement('link')
 fontLink.rel = 'stylesheet'
