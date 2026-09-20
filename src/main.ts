@@ -1,4 +1,4 @@
-import { PointerEventTypes, ShaderMaterial, Vector3 } from '@babylonjs/core'
+import { PointerEventTypes, Vector3 } from '@babylonjs/core'
 import { MixAudio } from './audio'
 import { PaintFluid } from './fluid'
 import { SHOTS, createStudio } from './studio'
@@ -140,7 +140,7 @@ function renderShots(): void {
 }
 
 function pickTray(px: number, py: number): Vector3 | null {
-  const hit = scene.pick(px, py, (m) => m === tray)
+  const hit = scene.pick(px, py, (m) => m === tray || m === fluid.mesh)
   if (hit?.hit && hit.pickedPoint) return hit.pickedPoint.clone()
   const ray = scene.createPickingRay(px, py, null, camera)
   const n = new Vector3(0, 1, 0)
@@ -235,9 +235,14 @@ scene.onBeforeRenderObservable.add(() => {
   const dt = Math.min(0.033, engine.getDeltaTime() / 1000)
   fluid.step(dt)
   fluid.setGloss(feel.gloss)
+  fluid.setLights(
+    new Vector3(-0.35, -1.15, -0.28),
+    new Vector3(0.2, -1, 0.35),
+    new Vector3(0.55, 0.35, -0.45),
+  )
   const mat = fluid.mesh.material
-  if (mat instanceof ShaderMaterial) {
-    mat.setVector3('cameraPosition', camera.position)
+  if (mat && 'setVector3' in mat) {
+    ;(mat as { setVector3: (n: string, v: Vector3) => void }).setVector3('cameraPosition', camera.position)
   }
 })
 

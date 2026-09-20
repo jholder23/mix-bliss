@@ -39,7 +39,7 @@ export function simFromViscosity(t: number): SimFeel {
     mix: lerp(0.28, 0.018, x),
     iterations: Math.round(lerp(3, 9, x)),
     gloss: lerp(0.38, 0.94, x),
-    rest: lerp(0.86, 0.72, x),
+    rest: lerp(0.78, 0.6, x),
   }
 }
 

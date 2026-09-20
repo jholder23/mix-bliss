@@ -31,12 +31,20 @@ export type CameraShot = {
 
 export const SHOTS: CameraShot[] = [
   { id: 'three', label: '3/4', alpha: -0.95, beta: 1.05, radius: 6.6 },
-  { id: 'top', label: 'Top', alpha: -0.95, beta: 0.18, radius: 7.4 },
+  { id: 'top', label: 'Top', alpha: -0.95, beta: 0.12, radius: 7.4 },
+  { id: 'front', label: 'Front', alpha: -Math.PI / 2, beta: 1.18, radius: 6.5 },
   { id: 'side', label: 'Side', alpha: 0.05, beta: 1.48, radius: 6.8 },
-  { id: 'low', label: 'Low', alpha: -2.3, beta: 1.22, radius: 5.9 },
+  { id: 'low', label: 'Low', alpha: -0.55, beta: 1.42, radius: 5.7 },
   { id: 'back', label: 'Back', alpha: 2.35, beta: 1.08, radius: 6.7 },
-  { id: 'under', label: 'Under', alpha: -0.7, beta: Math.PI - 0.38, radius: 6.4 },
+  { id: 'under', label: 'Under', alpha: -0.7, beta: Math.PI - 0.22, radius: 6.4 },
 ]
+
+function shortestAngle(from: number, to: number): number {
+  let d = to - from
+  while (d > Math.PI) d -= Math.PI * 2
+  while (d < -Math.PI) d += Math.PI * 2
+  return from + d
+}
 
 export function detectSoftware(engine: Engine): boolean {
   try {
@@ -54,6 +62,7 @@ function porcelain(scene: Scene, name: string): PBRMaterial {
   mat.roughness = 0.22
   mat.environmentIntensity = 0.85
   mat.enableSpecularAntiAliasing = true
+  mat.backFaceCulling = false
   return mat
 }
 
@@ -84,20 +93,28 @@ export function createStudio(canvas: HTMLCanvasElement): {
   scene.collisionsEnabled = false
 
   const camera = new ArcRotateCamera('cam', -0.95, 1.05, 6.6, new Vector3(0, 0.22, 0), scene)
-  camera.lowerRadiusLimit = 2.4
-  camera.upperRadiusLimit = 14
-  camera.lowerBetaLimit = 0.05
-  camera.upperBetaLimit = Math.PI - 0.05
+  camera.lowerRadiusLimit = 2.2
+  camera.upperRadiusLimit = 16
+  camera.lowerBetaLimit = 0.04
+  camera.upperBetaLimit = Math.PI - 0.04
   camera.allowUpsideDown = true
-  camera.panningSensibility = 420
-  camera.wheelPrecision = 40
+  camera.panningSensibility = 0
+  camera.wheelPrecision = 38
+  camera.pinchPrecision = 70
+  camera.angularSensibilityX = 1100
+  camera.angularSensibilityY = 1100
   camera.minZ = 0.04
   camera.maxZ = 80
-  camera.inertia = 0.78
+  camera.inertia = 0.72
+  camera.keysUp = [38]
+  camera.keysDown = [40]
+  camera.keysLeft = [37]
+  camera.keysRight = [39]
   camera.attachControl(canvas, true)
   const pointers = camera.inputs.attached.pointers as { buttons?: number[] } | undefined
   const applyOrbitButtons = (left: boolean) => {
-    if (pointers) pointers.buttons = left ? [0, 1, 2] : [1, 2]
+    if (!pointers) return
+    pointers.buttons = left ? [0, 1, 2] : [1, 2]
   }
   applyOrbitButtons(false)
 
@@ -132,11 +149,22 @@ export function createStudio(canvas: HTMLCanvasElement): {
     tray.updateVerticesData(VertexBuffer.PositionKind, pos)
     tray.createNormals(true)
   }
-  tray.material = porcelain(scene, 'dish')
+  const dishMat = porcelain(scene, 'dish')
+  tray.material = dishMat
+  tray.alwaysSelectAsActiveMesh = true
+
+  const dishBody = MeshBuilder.CreateCylinder(
+    'dishBody',
+    { diameter: TRAY_R * 2.18, height: 0.16, tessellation: software ? 28 : 48 },
+    scene,
+  )
+  dishBody.position.y = -0.04
+  dishBody.material = dishMat
+  dishBody.isPickable = false
 
   const rim = MeshBuilder.CreateTorus('rim', { diameter: TRAY_R * 2.05, thickness: 0.16, tessellation: software ? 32 : 64 }, scene)
   rim.position.y = 0.22
-  rim.material = tray.material
+  rim.material = dishMat
   rim.isPickable = false
 
   const wall = MeshBuilder.CreateBox('room', { width: 28, height: 16, depth: 28 }, scene)
@@ -171,7 +199,7 @@ export function createStudio(canvas: HTMLCanvasElement): {
 
   const probe = new ReflectionProbe('studioProbe', software ? 64 : 128, scene, false)
   probe.refreshRate = software ? 90 : 24
-  probe.renderList = [wall, softbox, windowPane, table]
+  probe.renderList = [wall, softbox, windowPane, table, dishBody, rim]
   scene.environmentTexture = probe.cubeTexture
   scene.environmentIntensity = 0.95
 
@@ -226,14 +254,18 @@ export function createStudio(canvas: HTMLCanvasElement): {
   let goal: CameraShot | null = null
   scene.onBeforeRenderObservable.add(() => {
     if (!goal) return
-    camera.alpha += (goal.alpha - camera.alpha) * 0.08
-    camera.beta += (goal.beta - camera.beta) * 0.08
-    camera.radius += (goal.radius - camera.radius) * 0.08
+    const wantA = shortestAngle(camera.alpha, goal.alpha)
+    camera.alpha += (wantA - camera.alpha) * 0.1
+    camera.beta += (goal.beta - camera.beta) * 0.1
+    camera.radius += (goal.radius - camera.radius) * 0.1
     if (
-      Math.abs(camera.alpha - goal.alpha) < 0.004 &&
+      Math.abs(shortestAngle(camera.alpha, goal.alpha) - camera.alpha) < 0.004 &&
       Math.abs(camera.beta - goal.beta) < 0.004 &&
       Math.abs(camera.radius - goal.radius) < 0.02
     ) {
+      camera.alpha = goal.alpha
+      camera.beta = goal.beta
+      camera.radius = goal.radius
       goal = null
     }
   })

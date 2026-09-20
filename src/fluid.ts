@@ -1,23 +1,24 @@
 import {
   Color3,
-  Matrix,
+  Constants,
   Mesh,
   MeshBuilder,
-  Quaternion,
+  RawTexture,
+  Texture,
   Vector3,
+  VertexBuffer,
   type Scene,
 } from '@babylonjs/core'
 import { createPaintMaterial } from './paintShader'
 import type { SimFeel } from './paints'
 
 export const TRAY_R = 2.28
-export const MAX_PARTICLES = 280
+export const HEIGHT_SCALE = 0.95
 
-function trayHeight(x: number, z: number): number {
-  const r = Math.hypot(x, z) / TRAY_R
+function trayHeight(x: number, y: number): number {
+  const r = Math.hypot(x, y) / TRAY_R
   if (r > 1.12) return 0.42
-  const bowl = r * r * 0.2
-  return 0.04 + bowl
+  return 0.04 + r * r * 0.2
 }
 
 export class PaintFluid {
@@ -28,41 +29,80 @@ export class PaintFluid {
   private rad: Float32Array
   private live: Uint8Array
   private count = 0
-  private matrices: Float32Array
-  private colors: Float32Array
-  private tmp = Matrix.Identity()
-  private q = Quaternion.Identity()
-  private scaling = new Vector3(1, 1, 1)
-  private position = new Vector3()
+  private cap: number
   private hash: number[][] = []
   private cell = 0.22
+  private heights: Float32Array
+  private weight: Float32Array
+  private cr: Float32Array
+  private cg: Float32Array
+  private cb: Float32Array
+  private rgba: Uint8Array
+  private base: Float32Array
+  private verts: Float32Array
+  private map: RawTexture
+  private res: number
   feel: SimFeel
   software: boolean
 
   constructor(scene: Scene, feel: SimFeel, software: boolean) {
     this.feel = feel
     this.software = software
-    const cap = MAX_PARTICLES
-    this.pos = new Float32Array(cap * 3)
-    this.prev = new Float32Array(cap * 3)
-    this.col = new Float32Array(cap * 3)
-    this.rad = new Float32Array(cap)
-    this.live = new Uint8Array(cap)
-    this.matrices = new Float32Array(cap * 16)
-    this.colors = new Float32Array(cap * 4)
+    this.cap = software ? 180 : 380
+    this.pos = new Float32Array(this.cap * 3)
+    this.prev = new Float32Array(this.cap * 3)
+    this.col = new Float32Array(this.cap * 3)
+    this.rad = new Float32Array(this.cap)
+    this.live = new Uint8Array(this.cap)
 
-    const subdiv = software ? 1 : 2
-    this.mesh = MeshBuilder.CreateIcoSphere(
-      'paint',
-      { radius: 1, subdivisions: subdiv, flat: false },
+    this.res = software ? 112 : 176
+    const n = this.res * this.res
+    this.heights = new Float32Array(n)
+    this.weight = new Float32Array(n)
+    this.cr = new Float32Array(n)
+    this.cg = new Float32Array(n)
+    this.cb = new Float32Array(n)
+    this.rgba = new Uint8Array(n * 4)
+
+    const subdiv = software ? 72 : 118
+    this.mesh = MeshBuilder.CreateGround(
+      'paintSurf',
+      { width: TRAY_R * 2, height: TRAY_R * 2, subdivisions: subdiv, updatable: true },
       scene,
     )
-    this.mesh.thinInstanceSetBuffer('matrix', this.matrices, 16, false)
-    this.mesh.thinInstanceSetBuffer('color', this.colors, 4, false)
-    this.mesh.thinInstanceCount = 0
-    this.mesh.isPickable = false
+    const raw = this.mesh.getVerticesData(VertexBuffer.PositionKind)
+    if (!raw) throw new Error('Paint surface has no vertices')
+    this.base = new Float32Array(raw)
+    this.verts = new Float32Array(raw)
+    for (let i = 0; i < this.verts.length; i += 3) {
+      const x = this.verts[i] ?? 0
+      const z = this.verts[i + 2] ?? 0
+      this.verts[i + 1] = trayHeight(x, z)
+    }
+    this.mesh.updateVerticesData(VertexBuffer.PositionKind, this.verts)
+    this.mesh.isPickable = true
     this.mesh.alwaysSelectAsActiveMesh = true
-    this.mesh.material = createPaintMaterial(scene)
+    this.mesh.doNotSyncBoundingInfo = false
+
+    this.map = new RawTexture(
+      this.rgba,
+      this.res,
+      this.res,
+      Constants.TEXTUREFORMAT_RGBA,
+      scene,
+      false,
+      false,
+      Texture.BILINEAR_SAMPLINGMODE,
+      Constants.TEXTURETYPE_UNSIGNED_BYTE,
+    )
+    this.map.wrapU = Texture.CLAMP_ADDRESSMODE
+    this.map.wrapV = Texture.CLAMP_ADDRESSMODE
+
+    const mat = createPaintMaterial(scene, software)
+    mat.setTexture('paintMap', this.map)
+    mat.setFloat('trayR', TRAY_R)
+    mat.setFloat('heightScale', HEIGHT_SCALE)
+    this.mesh.material = mat
   }
 
   setFeel(feel: SimFeel): void {
@@ -72,21 +112,24 @@ export class PaintFluid {
   scrape(): void {
     this.live.fill(0)
     this.count = 0
-    this.mesh.thinInstanceCount = 0
+    this.heights.fill(0)
+    this.rgba.fill(0)
+    this.map.update(this.rgba)
+    this.rebuildSurface()
   }
 
   private spawnOne(x: number, y: number, z: number, rgb: [number, number, number], radius: number): void {
     let slot = -1
-    if (this.count < MAX_PARTICLES) {
+    if (this.count < this.cap) {
       slot = this.count++
     } else {
-      for (let i = 0; i < MAX_PARTICLES; i++) {
+      for (let i = 0; i < this.cap; i++) {
         if (!this.live[i]) {
           slot = i
           break
         }
       }
-      if (slot < 0) slot = Math.floor(Math.random() * MAX_PARTICLES)
+      if (slot < 0) slot = Math.floor(Math.random() * this.cap)
     }
     const i3 = slot * 3
     this.pos[i3] = x
@@ -103,44 +146,43 @@ export class PaintFluid {
   }
 
   glop(at: Vector3, rgb: [number, number, number], size: number): void {
-    const n = Math.round(14 + size * 38)
-    const spread = 0.18 + size * 0.42
-    const pr = 0.09 + size * 0.09
-    const baseY = trayHeight(at.x, at.z) + pr
+    const n = Math.round(28 + size * 52)
+    const moundR = 0.26 + size * 0.4
+    const pr = 0.1 + size * 0.055
+    const gold = Math.PI * (3 - Math.sqrt(5))
     for (let i = 0; i < n; i++) {
-      const u = Math.random()
-      const v = Math.random()
-      const theta = u * Math.PI * 2
-      const phi = Math.acos(2 * v - 1)
-      const mag = spread * Math.cbrt(Math.random())
-      const x = at.x + Math.sin(phi) * Math.cos(theta) * mag
-      const z = at.z + Math.sin(phi) * Math.sin(theta) * mag
-      const y = baseY + Math.abs(Math.cos(phi)) * mag * 0.85 + pr * 0.4
-      this.spawnOne(x, y, z, rgb, pr * (0.82 + Math.random() * 0.28))
+      const u = (i + 0.5) / n
+      const rr = moundR * Math.sqrt(u)
+      const theta = i * gold
+      const x = at.x + Math.cos(theta) * rr
+      const z = at.z + Math.sin(theta) * rr
+      const dome = Math.sqrt(Math.max(0, 1 - (rr / moundR) * (rr / moundR)))
+      const y = trayHeight(x, z) + dome * (0.28 + size * 0.38) + pr * 0.35
+      this.spawnOne(x, y, z, rgb, pr * (0.88 + Math.random() * 0.18))
     }
   }
 
   stir(at: Vector3, delta: Vector3, radius: number, kind: 'finger' | 'knife' | 'stick'): void {
     const r2 = radius * radius
-    const force = kind === 'knife' ? 1.35 : kind === 'stick' ? 0.55 : 0.9
-    const flatten = kind === 'knife' ? 0.55 : kind === 'finger' ? 0.18 : 0.08
+    const force = kind === 'knife' ? 1.45 : kind === 'stick' ? 0.58 : 0.95
+    const flatten = kind === 'knife' ? 0.62 : kind === 'finger' ? 0.22 : 0.1
     for (let i = 0; i < this.count; i++) {
       if (!this.live[i]) continue
       const i3 = i * 3
       const dx = this.pos[i3] - at.x
       const dy = this.pos[i3 + 1] - at.y
       const dz = this.pos[i3 + 2] - at.z
-      const d2 = dx * dx + dy * dy * 0.45 + dz * dz
+      const d2 = dx * dx + dy * dy * 0.4 + dz * dz
       if (d2 > r2) continue
       const w = 1 - d2 / r2
       this.pos[i3] += delta.x * force * w
       this.pos[i3 + 2] += delta.z * force * w
-      this.pos[i3 + 1] -= flatten * w * this.rad[i]
+      this.pos[i3 + 1] -= flatten * w * (this.rad[i] ?? 0.1)
       if (kind === 'knife') {
         const side = dx * delta.z - dz * delta.x
         const s = side === 0 ? 1 : Math.sign(side)
-        this.pos[i3] += (-delta.z) * 0.35 * w * s
-        this.pos[i3 + 2] += delta.x * 0.35 * w * s
+        this.pos[i3] += -delta.z * 0.42 * w * s
+        this.pos[i3 + 2] += delta.x * 0.42 * w * s
       }
     }
   }
@@ -153,9 +195,9 @@ export class PaintFluid {
     for (let i = 0; i < n; i++) {
       if (!this.live[i]) continue
       const i3 = i * 3
-      let vx = (this.pos[i3] - this.prev[i3]) * damp
-      let vy = (this.pos[i3 + 1] - this.prev[i3 + 1]) * damp
-      let vz = (this.pos[i3 + 2] - this.prev[i3 + 2]) * damp
+      const vx = (this.pos[i3] - this.prev[i3]) * damp
+      const vy = (this.pos[i3 + 1] - this.prev[i3 + 1]) * damp
+      const vz = (this.pos[i3 + 2] - this.prev[i3 + 2]) * damp
       this.prev[i3] = this.pos[i3]
       this.prev[i3 + 1] = this.pos[i3 + 1]
       this.prev[i3 + 2] = this.pos[i3 + 2]
@@ -167,7 +209,8 @@ export class PaintFluid {
     this.rebuildHash()
     const iters = this.software ? Math.min(4, feel.iterations) : feel.iterations
     for (let k = 0; k < iters; k++) this.solve()
-    this.pushToGpu()
+    this.splat()
+    this.rebuildSurface()
   }
 
   private rebuildHash(): void {
@@ -212,7 +255,7 @@ export class PaintFluid {
       if (!this.live[i]) continue
       const i3 = i * 3
       const ri = this.rad[i] ?? 0.1
-      const floor = trayHeight(this.pos[i3], this.pos[i3 + 2]) + ri * 0.92
+      const floor = trayHeight(this.pos[i3], this.pos[i3 + 2]) + ri * 0.55
       if (this.pos[i3 + 1] < floor) this.pos[i3 + 1] = floor
       const rr = Math.hypot(this.pos[i3], this.pos[i3 + 2])
       const lim = TRAY_R - ri * 0.8
@@ -238,10 +281,10 @@ export class PaintFluid {
           const ny = dy / dist
           const nz = dz / dist
           this.pos[i3] -= nx * push
-          this.pos[i3 + 1] -= ny * push * 0.7
+          this.pos[i3 + 1] -= ny * push * 0.65
           this.pos[i3 + 2] -= nz * push
           this.pos[j3] += nx * push
-          this.pos[j3 + 1] += ny * push * 0.7
+          this.pos[j3 + 1] += ny * push * 0.65
           this.pos[j3 + 2] += nz * push
           const mix = feel.mix * (1 - dist / rest)
           this.col[i3] += (this.col[j3] - this.col[i3]) * mix
@@ -250,8 +293,8 @@ export class PaintFluid {
           this.col[j3] += (this.col[i3] - this.col[j3]) * mix
           this.col[j3 + 1] += (this.col[i3 + 1] - this.col[j3 + 1]) * mix
           this.col[j3 + 2] += (this.col[i3 + 2] - this.col[j3 + 2]) * mix
-        } else if (dist < rest * 2.1) {
-          const pull = feel.cohesion * (dist - rest) * 0.018
+        } else if (dist < rest * 2.0) {
+          const pull = feel.cohesion * (dist - rest) * 0.02
           const nx = dx / dist
           const ny = dy / dist
           const nz = dz / dist
@@ -266,28 +309,103 @@ export class PaintFluid {
     }
   }
 
-  private pushToGpu(): void {
-    let w = 0
+  private splat(): void {
+    this.heights.fill(0)
+    this.weight.fill(0)
+    this.cr.fill(0)
+    this.cg.fill(0)
+    this.cb.fill(0)
+    const res = this.res
+    const worldTo = res / (TRAY_R * 2)
     const n = this.count
     for (let i = 0; i < n; i++) {
       if (!this.live[i]) continue
       const i3 = i * 3
-      const r = this.rad[i] ?? 0.1
-      this.position.set(this.pos[i3], this.pos[i3 + 1], this.pos[i3 + 2])
-      this.scaling.set(r, r, r)
-      Matrix.ComposeToRef(this.scaling, this.q, this.position, this.tmp)
-      this.tmp.copyToArray(this.matrices, w * 16)
-      const c4 = w * 4
-      this.colors[c4] = this.col[i3] ?? 1
-      this.colors[c4 + 1] = this.col[i3 + 1] ?? 1
-      this.colors[c4 + 2] = this.col[i3 + 2] ?? 1
-      this.colors[c4 + 3] = 1
-      w++
+      const px = this.pos[i3]
+      const py = this.pos[i3 + 1]
+      const pz = this.pos[i3 + 2]
+      const r = (this.rad[i] ?? 0.1) * 1.55
+      const r2 = r * r
+      const tx = (px + TRAY_R) * worldTo
+      const tz = (pz + TRAY_R) * worldTo
+      const pr = r * worldTo
+      const x0 = Math.max(0, Math.floor(tx - pr - 1))
+      const x1 = Math.min(res - 1, Math.ceil(tx + pr + 1))
+      const z0 = Math.max(0, Math.floor(tz - pr - 1))
+      const z1 = Math.min(res - 1, Math.ceil(tz + pr + 1))
+      const prr = this.col[i3] ?? 1
+      const pgg = this.col[i3 + 1] ?? 1
+      const pbb = this.col[i3 + 2] ?? 1
+      for (let iz = z0; iz <= z1; iz++) {
+        for (let ix = x0; ix <= x1; ix++) {
+          const wx = ix / worldTo - TRAY_R
+          const wz = iz / worldTo - TRAY_R
+          const d2 = (wx - px) * (wx - px) + (wz - pz) * (wz - pz)
+          if (d2 > r2) continue
+          const env = Math.sqrt(r2 - d2)
+          const yTop = py + env
+          const extra = Math.max(0, yTop - trayHeight(wx, wz))
+          const idx = iz * res + ix
+          if (extra > (this.heights[idx] ?? 0)) this.heights[idx] = extra
+          const w = env
+          this.weight[idx] = (this.weight[idx] ?? 0) + w
+          this.cr[idx] = (this.cr[idx] ?? 0) + prr * w
+          this.cg[idx] = (this.cg[idx] ?? 0) + pgg * w
+          this.cb[idx] = (this.cb[idx] ?? 0) + pbb * w
+        }
+      }
     }
-    this.mesh.thinInstanceCount = w
-    if (w === 0) return
-    this.mesh.thinInstanceSetBuffer('matrix', this.matrices, 16, false)
-    this.mesh.thinInstanceSetBuffer('color', this.colors, 4, false)
+
+    const rgba = this.rgba
+    const inv = 1 / HEIGHT_SCALE
+    for (let i = 0; i < this.heights.length; i++) {
+      const w = this.weight[i] ?? 0
+      const o = i * 4
+      if (w > 1e-5) {
+        rgba[o] = Math.min(255, Math.round(((this.cr[i] ?? 0) / w) * 255))
+        rgba[o + 1] = Math.min(255, Math.round(((this.cg[i] ?? 0) / w) * 255))
+        rgba[o + 2] = Math.min(255, Math.round(((this.cb[i] ?? 0) / w) * 255))
+        rgba[o + 3] = Math.min(255, Math.round((this.heights[i] ?? 0) * inv * 255))
+      } else {
+        rgba[o] = 0
+        rgba[o + 1] = 0
+        rgba[o + 2] = 0
+        rgba[o + 3] = 0
+      }
+    }
+    this.map.update(this.rgba)
+  }
+
+  private sampleHeight(x: number, z: number): number {
+    const res = this.res
+    const u = (x + TRAY_R) / (TRAY_R * 2) * (res - 1)
+    const v = (z + TRAY_R) / (TRAY_R * 2) * (res - 1)
+    const x0 = Math.floor(u)
+    const z0 = Math.floor(v)
+    if (x0 < 0 || z0 < 0 || x0 >= res - 1 || z0 >= res - 1) return 0
+    const fx = u - x0
+    const fz = v - z0
+    const i00 = z0 * res + x0
+    const h00 = this.heights[i00] ?? 0
+    const h10 = this.heights[i00 + 1] ?? 0
+    const h01 = this.heights[i00 + res] ?? 0
+    const h11 = this.heights[i00 + res + 1] ?? 0
+    return h00 * (1 - fx) * (1 - fz) + h10 * fx * (1 - fz) + h01 * (1 - fx) * fz + h11 * fx * fz
+  }
+
+  private rebuildSurface(): void {
+    const v = this.verts
+    const b = this.base
+    for (let i = 0; i < v.length; i += 3) {
+      const x = b[i] ?? 0
+      const z = b[i + 2] ?? 0
+      v[i] = x
+      v[i + 2] = z
+      v[i + 1] = trayHeight(x, z) + this.sampleHeight(x, z)
+    }
+    this.mesh.updateVerticesData(VertexBuffer.PositionKind, v, false)
+    this.mesh.createNormals(true)
+    this.mesh.refreshBoundingInfo()
   }
 
   setGloss(gloss: number): void {
@@ -304,7 +422,6 @@ export class PaintFluid {
     mat.setColor3('keyCol', new Color3(1.05, 1.0, 0.95))
     mat.setVector3('fillDir', fill)
     mat.setColor3('fillCol', new Color3(0.55, 0.62, 0.72))
-    mat.setVector3('rimDir', new Vector3(0.4, -0.2, 0.6))
     mat.setVector3('windowDir', windowDir)
     mat.setColor3('floorCol', new Color3(0.55, 0.48, 0.38))
     mat.setVector3('cameraPosition', Vector3.Zero())
