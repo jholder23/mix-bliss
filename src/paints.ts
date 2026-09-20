@@ -32,7 +32,7 @@ const TUBE_SPECS: readonly TubeSpec[] = [
     name: 'Cadmium Red',
     hex: '#d42a1e',
     scatter: 0.92,
-    reflectance: [0.04, 0.035, 0.04, 0.055, 0.16, 0.72, 0.86, 0.88],
+    reflectance: [0.04, 0.035, 0.045, 0.08, 0.28, 0.78, 0.88, 0.9],
   },
   {
     name: 'Quinacridone Magenta',
@@ -55,8 +55,8 @@ const TUBE_SPECS: readonly TubeSpec[] = [
   {
     name: 'Ultramarine',
     hex: '#2a4bd7',
-    scatter: 0.55,
-    reflectance: [0.28, 0.78, 0.42, 0.1, 0.045, 0.04, 0.055, 0.08],
+    scatter: 0.52,
+    reflectance: [0.34, 0.82, 0.28, 0.06, 0.035, 0.04, 0.07, 0.12],
   },
   {
     name: 'Cerulean',

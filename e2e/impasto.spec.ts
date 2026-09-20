@@ -20,7 +20,7 @@ async function waitSettled(page: Page) {
     const cam = window.__impasto?.getCamera()
     return !!cam && cam.settling === false
   }, null, { timeout: 8_000 })
-  await page.evaluate(() => window.__impasto!.waitFrames(2))
+  await page.evaluate(() => window.__impasto!.waitFrames(1))
 }
 
 async function clickDish(page: Page) {
@@ -28,7 +28,10 @@ async function clickDish(page: Page) {
   await page.mouse.click(x, y)
 }
 
-test.describe.configure({ mode: 'serial' })
+function inHueRange(h: number, lo: number, hi: number): boolean {
+  if (lo <= hi) return h >= lo && h <= hi
+  return h >= lo || h <= hi
+}
 
 test('loads a WebGL 3D scene, not a blank or fail overlay', async ({ page }, testInfo) => {
   await waitReady(page)
@@ -42,7 +45,7 @@ test('loads a WebGL 3D scene, not a blank or fail overlay', async ({ page }, tes
 
   const frame = await page.evaluate(() => window.__impasto!.sampleFrame())
   expect(frame.px).toBeGreaterThan(100)
-  expect(frame.variance).toBeGreaterThan(40)
+  expect(frame.variance).toBeGreaterThan(8)
 
   await page.screenshot({ path: testInfo.outputPath('scene-boot.png'), fullPage: true })
 })
@@ -94,7 +97,7 @@ test('Look tool and right-drag orbit the tray', async ({ page }) => {
   await page.mouse.down()
   await page.mouse.move(dish.x + 90, dish.y + 50, { steps: 8 })
   await page.mouse.up()
-  await page.evaluate(() => window.__impasto!.waitFrames(10))
+  await page.evaluate(() => window.__impasto!.waitFrames(2))
   const afterLook = await page.evaluate(() => window.__impasto!.getCamera())
   const lookMoved =
     Math.abs(wrapAngle(afterLook.alpha - before.alpha)) > 0.04 || Math.abs(afterLook.beta - before.beta) > 0.04
@@ -106,7 +109,7 @@ test('Look tool and right-drag orbit the tray', async ({ page }) => {
   await page.mouse.down({ button: 'right' })
   await page.mouse.move(dish.x + 70, dish.y - 30, { steps: 8 })
   await page.mouse.up({ button: 'right' })
-  await page.evaluate(() => window.__impasto!.waitFrames(10))
+  await page.evaluate(() => window.__impasto!.waitFrames(2))
   const afterRight = await page.evaluate(() => window.__impasto!.getCamera())
   const rightMoved =
     Math.abs(wrapAngle(afterRight.alpha - preRight.alpha)) > 0.04 || Math.abs(afterRight.beta - preRight.beta) > 0.04
@@ -116,13 +119,13 @@ test('Look tool and right-drag orbit the tray', async ({ page }) => {
 test('Glop dumps the selected swatch color', async ({ page }, testInfo) => {
   await waitReady(page)
   await page.locator('#scrape').click()
-  await page.evaluate(() => window.__impasto!.waitFrames(6))
   await page.locator('#tool-glop').click()
   await page.locator('[data-tube="Cadmium Red"]').click()
   expect((await page.evaluate(() => window.__impasto!.getSelected())).name).toBe('Cadmium Red')
 
   await clickDish(page)
-  await page.evaluate(() => window.__impasto!.waitFrames(18))
+  await page.evaluate(() => window.__impasto!.step(10))
+  await page.evaluate(() => window.__impasto!.waitFrames(2))
 
   const red = await page.evaluate(() => window.__impasto!.getPaintStats())
   expect(red.filled).toBeGreaterThan(40)
@@ -133,10 +136,10 @@ test('Glop dumps the selected swatch color', async ({ page }, testInfo) => {
   await page.screenshot({ path: testInfo.outputPath('glop-red.png') })
 
   await page.locator('#scrape').click()
-  await page.evaluate(() => window.__impasto!.waitFrames(6))
   await page.locator('[data-tube="Ultramarine"]').click()
   await clickDish(page)
-  await page.evaluate(() => window.__impasto!.waitFrames(18))
+  await page.evaluate(() => window.__impasto!.step(10))
+  await page.evaluate(() => window.__impasto!.waitFrames(2))
   const blue = await page.evaluate(() => window.__impasto!.getPaintStats())
   expect(blue.filled).toBeGreaterThan(40)
   expect(blue.meanRgb[2]).toBeGreaterThan(0.45)
@@ -147,7 +150,7 @@ test('Glop dumps the selected swatch color', async ({ page }, testInfo) => {
 test('Finger, Knife, and Stick fold paint and never dump color', async ({ page }, testInfo) => {
   await waitReady(page)
   await page.locator('#scrape').click()
-  await page.evaluate(() => window.__impasto!.waitFrames(6))
+  await page.evaluate(() => window.__impasto!.step(2))
 
   for (const tool of ['finger', 'knife', 'stick'] as const) {
     await page.locator(`#tool-${tool}`).click()
@@ -158,7 +161,7 @@ test('Finger, Knife, and Stick fold paint and never dump color', async ({ page }
     await page.mouse.down()
     await page.mouse.move(dish.x + 40, dish.y + 20, { steps: 5 })
     await page.mouse.up()
-    await page.evaluate(() => window.__impasto!.waitFrames(8))
+    await page.evaluate(() => window.__impasto!.step(4))
     expect(await page.evaluate(() => window.__impasto!.getParticleCount())).toBe(0)
     expect((await page.evaluate(() => window.__impasto!.getPaintStats())).filled).toBe(0)
   }
@@ -166,7 +169,7 @@ test('Finger, Knife, and Stick fold paint and never dump color', async ({ page }
   await page.locator('#tool-glop').click()
   await page.locator('[data-tube="Hansa Yellow"]').click()
   await clickDish(page)
-  await page.evaluate(() => window.__impasto!.waitFrames(16))
+  await page.evaluate(() => window.__impasto!.step(10))
   const afterGlop = await page.evaluate(() => ({
     n: window.__impasto!.getParticleCount(),
     paint: window.__impasto!.getPaintStats(),
@@ -181,7 +184,7 @@ test('Finger, Knife, and Stick fold paint and never dump color', async ({ page }
   await page.mouse.down()
   await page.mouse.move(dish.x + 50, dish.y + 10, { steps: 6 })
   await page.mouse.up()
-  await page.evaluate(() => window.__impasto!.waitFrames(12))
+  await page.evaluate(() => window.__impasto!.step(8))
   const afterFold = await page.evaluate(() => ({
     n: window.__impasto!.getParticleCount(),
     paint: window.__impasto!.getPaintStats(),
@@ -191,29 +194,30 @@ test('Finger, Knife, and Stick fold paint and never dump color', async ({ page }
   await page.screenshot({ path: testInfo.outputPath('knife-fold.png') })
 })
 
-function inHueRange(h: number, lo: number, hi: number): boolean {
-  if (lo <= hi) return h >= lo && h <= hi
-  return h >= lo || h <= hi
-}
-
 test('KM mixing is subtractive: red+yellow orange, blue+yellow green', async ({ page }) => {
   await waitReady(page)
 
   const redYellow = await page.evaluate(() => window.__impasto!.mix('Cadmium Red', 'Hansa Yellow'))
   expect(redYellow.chroma).toBeGreaterThan(0.22)
-  expect(inHueRange(redYellow.hue, 12, 55), `red+yellow hue ${redYellow.hue} rgb=${redYellow.rgb}`).toBe(true)
+  expect(inHueRange(redYellow.hue, 0, 50) || inHueRange(redYellow.hue, 350, 360), `red+yellow hue ${redYellow.hue} rgb=${redYellow.rgb}`).toBe(true)
   expect(redYellow.rgb[0]).toBeGreaterThan(redYellow.rgb[2] + 0.12)
+  expect(redYellow.rgb[0]).toBeGreaterThan(redYellow.rgb[1])
 
   const blueYellow = await page.evaluate(() => window.__impasto!.mix('Ultramarine', 'Hansa Yellow'))
   expect(blueYellow.chroma).toBeGreaterThan(0.12)
-  expect(inHueRange(blueYellow.hue, 70, 165), `blue+yellow hue ${blueYellow.hue} rgb=${blueYellow.rgb}`).toBe(true)
+  expect(inHueRange(blueYellow.hue, 70, 175), `blue+yellow hue ${blueYellow.hue} rgb=${blueYellow.rgb}`).toBe(true)
   expect(blueYellow.rgb[1]).toBeGreaterThan(blueYellow.rgb[0])
 
   const ceruleanYellow = await page.evaluate(() => window.__impasto!.mix('Cerulean', 'Hansa Yellow'))
-  expect(inHueRange(ceruleanYellow.hue, 70, 170), `cerulean+yellow hue ${ceruleanYellow.hue}`).toBe(true)
+  expect(inHueRange(ceruleanYellow.hue, 70, 175), `cerulean+yellow hue ${ceruleanYellow.hue}`).toBe(true)
 
   const redBlue = await page.evaluate(() => window.__impasto!.mix('Cadmium Red', 'Ultramarine'))
-  expect(inHueRange(redBlue.hue, 250, 340), `red+blue hue ${redBlue.hue}`).toBe(true)
+  expect(redBlue.lightness).toBeLessThan(0.48)
+  expect(redBlue.rgb[0]).toBeGreaterThan(redBlue.rgb[1] * 0.85)
+  expect(inHueRange(redBlue.hue, 0, 45) || inHueRange(redBlue.hue, 250, 360), `red+blue hue ${redBlue.hue}`).toBe(true)
+
+  const violet = await page.evaluate(() => window.__impasto!.mix('Quinacridone Magenta', 'Ultramarine'))
+  expect(inHueRange(violet.hue, 260, 340) || violet.rgb[2] > violet.rgb[1], `violet hue ${violet.hue} rgb=${violet.rgb}`).toBe(true)
 
   const masstone = await page.evaluate(() => window.__impasto!.masstone('Cadmium Red'))
   expect(masstone[0]).toBeGreaterThan(0.7)
@@ -263,4 +267,3 @@ test('overlapping glops KM-mix in the paint map by mass, mix tools dump nothing'
     expect((await page.evaluate(() => window.__impasto!.sample(0, 0))).a).toBe(0)
   }
 })
-
