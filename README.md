@@ -38,10 +38,10 @@ npm run preview
 
 ## How to mix
 
-- **Glop** — press to squeeze paint onto the empty tray. Hold to pile more. Drag a bead. Size goes from dab to dump.
-- **Finger** — stir and part the pile.
-- **Knife** — palette knife: wide fold, sharp trough, metal blade.
-- **Stick** — thin wooden stir, tight eddy.
+- **Glop** — tap to squeeze one mound of the selected tube color. Drag to lay spaced beads of that same color. It does not keep pumping while you hold still.
+- **Finger** — stir and part the pile. Does not add paint.
+- **Knife** — palette knife: a thin fold and trough. Does not add paint.
+- **Stick** — thin wooden stir. Does not add paint.
 - **Viscosity** — water through honey to tar.
 - **Scrape** — wipe the tray.
 

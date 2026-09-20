@@ -53,7 +53,7 @@ type Stroke = {
   prev: [number, number] | null
   moved: number
   started: number
-  lastGlop: number
+  lastDump: [number, number]
   dir: [number, number]
 }
 
@@ -69,10 +69,10 @@ function sizeName(t: number): string {
 }
 
 function toolRadius(): number {
-  if (tool === 'stick') return feel.fingerRadius * 0.4 * (0.55 + size)
-  if (tool === 'knife') return feel.fingerRadius * 1.15 * (0.7 + size * 0.55)
-  if (tool === 'glop') return feel.dyeRadius * (0.4 + size * 0.9)
-  return feel.fingerRadius * (0.7 + size * 0.7)
+  if (tool === 'stick') return feel.fingerRadius * 0.32 * (0.55 + size)
+  if (tool === 'knife') return feel.fingerRadius * 0.82 * (0.65 + size * 0.45)
+  if (tool === 'glop') return feel.dyeRadius * (0.42 + size * 0.88)
+  return feel.fingerRadius * (0.62 + size * 0.55)
 }
 
 function toUv(event: PointerEvent): [number, number] {
@@ -88,17 +88,17 @@ function glopAt(uv: [number, number], strength: number): void {
 
 function mixAt(uv: [number, number], delta: [number, number], steps: number): void {
   const radius = toolRadius()
-  const depthScale = tool === 'knife' ? 0.72 : tool === 'stick' ? 0.22 : 0.38
-  const pushScale = tool === 'knife' ? 0.22 : tool === 'stick' ? 1.15 : 0.85
-  const dragScale = tool === 'knife' ? 0.95 : 0.85
+  const depthScale = tool === 'knife' ? 0.58 : tool === 'stick' ? 0.2 : 0.34
+  const pushScale = tool === 'knife' ? 0.16 : tool === 'stick' ? 0.95 : 0.72
+  const dragScale = tool === 'knife' ? 0.55 : 0.62
   const depth = (feel.fingerDepth * depthScale) / steps
   const push = (feel.fingerPush * pushScale) / steps
   const drag = feel.splatForce * dragScale
   if (tool === 'knife') {
-    const len = radius * 1.35
-    const width = radius * 0.48
+    const len = radius * 0.82
+    const width = radius * 0.16
     engine.displaceBlade(uv, delta, len, width, depth)
-    engine.nudgeRadial(uv, delta, radius, push, drag)
+    engine.nudgeBlade(uv, delta, delta, len, width, push, drag)
     return
   }
   engine.displaceHeight(uv, radius, depth)
@@ -175,16 +175,14 @@ canvas.addEventListener('pointerdown', (event) => {
     prev: uv,
     moved: 0,
     started: performance.now(),
-    lastGlop: performance.now(),
+    lastDump: uv,
     dir: [1, 0],
   })
   canvas.style.cursor = 'none'
   if (tool === 'glop') {
-    glopAt(uv, 1.55 + size * 0.85)
+    glopAt(uv, 1.7 + size * 0.95)
     audio.blob()
     if (navigator.vibrate) navigator.vibrate(8)
-  } else {
-    mixAt(uv, [0, 0], 1)
   }
   hideHint()
 })
@@ -205,14 +203,13 @@ canvas.addEventListener('pointermove', (event) => {
     const radius = toolRadius()
     const steps = Math.max(1, Math.ceil(dist / (radius * 0.28)))
     if (tool === 'glop') {
-      if (dist > 0.01) {
-        for (let i = 1; i <= steps; i++) {
-          const t = i / steps
-          const p: [number, number] = [stroke.prev[0] + dx * t, stroke.prev[1] + dy * t]
-          glopAt(p, (0.35 + size * 0.25) / steps)
-        }
+      const gap = Math.hypot(uv[0] - stroke.lastDump[0], uv[1] - stroke.lastDump[1])
+      if (gap > toolRadius() * 0.85) {
+        glopAt(uv, 1.35 + size * 0.7)
+        stroke.lastDump = uv
+        audio.blob()
       }
-    } else if (dist > 0.002) {
+    } else if (dist > 0.003) {
       for (let i = 1; i <= steps; i++) {
         const t = i / steps
         const p: [number, number] = [stroke.prev[0] + dx * t, stroke.prev[1] + dy * t]

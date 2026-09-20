@@ -45,9 +45,38 @@ void main() {
   p.x *= uAspect;
   float d = length(p);
   float r = max(uRadius, 1e-5);
-  float inner = exp(-d * d / (r * r * 0.22));
+  float inner = exp(-d * d / (r * r * 0.18));
   vec2 dir = d > 1e-5 ? p / d : vec2(0.0);
   vec2 add = dir * inner * uPush + uDelta * inner * uDrag;
+  vec4 base = texture(uTarget, vUv);
+  fragColor = vec4(base.xy + add, 0.0, 1.0);
+}
+`
+
+export const splatBladeVel = `#version 300 es
+precision highp float;
+in vec2 vUv;
+out vec4 fragColor;
+uniform sampler2D uTarget;
+uniform vec2 uPoint;
+uniform vec2 uDelta;
+uniform vec2 uDir;
+uniform float uLength;
+uniform float uWidth;
+uniform float uAspect;
+uniform float uPush;
+uniform float uDrag;
+
+void main() {
+  vec2 p = vUv - uPoint;
+  p.x *= uAspect;
+  vec2 t = length(uDir) > 1e-5 ? normalize(uDir) : vec2(1.0, 0.0);
+  vec2 n = vec2(-t.y, t.x);
+  vec2 local = vec2(dot(p, t), dot(p, n));
+  float ell = length(vec2(local.x / max(uLength, 1e-5), local.y / max(uWidth, 1e-5)));
+  float inner = exp(-ell * ell * 2.2);
+  vec2 fold = n * sign(local.y + 1e-6) * uPush;
+  vec2 add = uDelta * inner * uDrag + fold * inner;
   vec4 base = texture(uTarget, vUv);
   fragColor = vec4(base.xy + add, 0.0, 1.0);
 }
@@ -72,16 +101,26 @@ void main() {
   vec2 p = vUv - uPoint;
   p.x *= uAspect;
   float r = max(uRadius, 1e-5);
-  float ang = atan(p.y, p.x);
-  float wobble = 0.88 + 0.1 * sin(ang * 3.0 + hash(uPoint) * 6.28) + 0.05 * hash(p * 14.0 + uPoint);
-  float t = clamp(1.0 - length(p) / (r * wobble), 0.0, 1.0);
-  float dome = pow(t, 1.65);
-  float add = dome * uStrength;
+  float seed = hash(uPoint);
+  vec2 peak = vec2(cos(seed * 6.2832), sin(seed * 6.2832)) * r * 0.12;
+  vec2 q = p - peak;
+  float ang = atan(q.y, q.x);
+  float wobble = 0.9 + 0.08 * sin(ang * 3.0 + seed * 6.28) + 0.05 * sin(ang * 7.0 - seed * 4.1) + 0.03 * hash(q * 18.0 + uPoint);
+  float nd = length(q) / (r * wobble);
+  if (nd >= 1.0) {
+    fragColor = texture(uTarget, vUv);
+    return;
+  }
+  float hemi = sqrt(max(1.0 - nd * nd, 0.0));
+  float bead = exp(-pow(nd - 0.9, 2.0) / 0.01) * 0.1;
+  float add = (hemi * 1.05 + bead) * uStrength;
   vec4 base = texture(uTarget, vUv);
-  float newA = min(base.a + add, 3.4);
-  float lay = clamp(add * 2.2, 0.0, 1.0);
-  vec3 mixed = mix(base.rgb, uColor, lay);
-  if (base.a < 0.02) mixed = uColor;
+  float newA = min(base.a + add, 3.6);
+  vec3 mixed = uColor;
+  if (base.a > 0.04) {
+    float lay = add / max(base.a + add, 1e-4);
+    mixed = mix(base.rgb, uColor, clamp(lay * 1.65, 0.0, 1.0));
+  }
   fragColor = vec4(mixed, newA);
 }
 `
@@ -108,9 +147,11 @@ void main() {
   float groove = exp(-ell * ell * 1.8);
   float rim = exp(-pow(ell - 0.92, 2.0) / 0.06);
   vec4 base = texture(uTarget, vUv);
+  float exist = smoothstep(0.02, 0.1, base.a);
   float h = base.a;
-  h = max(0.0, h - groove * uDepth);
-  h = min(3.4, h + rim * uDepth * 1.15);
+  float dug = min(h, groove * uDepth * exist);
+  h = h - dug;
+  h = min(3.4, h + rim * dug * 1.25);
   fragColor = vec4(base.rgb, h);
 }
 `
@@ -133,9 +174,11 @@ void main() {
   float groove = exp(-d * d / (r * r * 0.28));
   float rim = exp(-pow(d - r * 0.78, 2.0) / (r * r * 0.055));
   vec4 base = texture(uTarget, vUv);
+  float exist = smoothstep(0.02, 0.1, base.a);
   float h = base.a;
-  h = max(0.0, h - groove * uDepth);
-  h = min(3.2, h + rim * uDepth * 1.05);
+  float dug = min(h, groove * uDepth * exist);
+  h = h - dug;
+  h = min(3.2, h + rim * dug * 1.2);
   fragColor = vec4(base.rgb, h);
 }
 `
@@ -396,14 +439,14 @@ vec3 F_Schlick(float cosTheta, vec3 F0) {
 
 vec3 studioEnv(vec3 dir) {
   vec3 d = normalize(dir);
-  vec3 col = mix(vec3(0.16, 0.11, 0.08), vec3(0.42, 0.38, 0.34), smoothstep(-0.2, 0.35, d.z));
-  col = mix(col, vec3(0.92, 0.89, 0.84), smoothstep(0.45, 1.0, d.z));
-  float softbox = pow(max(dot(d, normalize(vec3(-0.28, 0.62, 0.72))), 0.0), 18.0);
-  col += vec3(1.35, 1.24, 1.08) * softbox * 4.2;
-  float window = pow(max(dot(d, normalize(vec3(0.55, 0.15, 0.55))), 0.0), 42.0);
-  col += vec3(0.95, 0.93, 0.9) * window * 1.4;
+  vec3 col = mix(vec3(0.18, 0.16, 0.14), vec3(0.46, 0.44, 0.41), smoothstep(-0.2, 0.35, d.z));
+  col = mix(col, vec3(0.93, 0.92, 0.9), smoothstep(0.45, 1.0, d.z));
+  float softbox = pow(max(dot(d, normalize(vec3(-0.28, 0.62, 0.72))), 0.0), 22.0);
+  col += vec3(1.2, 1.16, 1.1) * softbox * 3.4;
+  float window = pow(max(dot(d, normalize(vec3(0.48, 0.22, 0.62))), 0.0), 56.0);
+  col += vec3(1.0, 0.99, 0.96) * window * 1.15;
   float ground = pow(max(-d.z, 0.0), 2.0);
-  col += vec3(0.28, 0.18, 0.1) * ground * 0.35;
+  col += vec3(0.22, 0.18, 0.14) * ground * 0.28;
   return col;
 }
 
@@ -427,7 +470,7 @@ float fingerHit(vec4 finger, vec2 uv, out vec3 n, out float wet) {
     return 0.0;
   }
   vec2 center = finger.xy;
-  float radius = finger.z * 1.08;
+  float radius = finger.z * 0.92;
   vec2 p = uv - center;
   p.x *= uAspect;
   float d = length(p);
@@ -463,32 +506,32 @@ void main() {
 
   float dx = (tr + 2.0 * r + br) - (tl + 2.0 * l + bl);
   float dy = (bl + 2.0 * b + br) - (tl + 2.0 * t + tr);
-  float relief = 11.5 + h * 5.5;
-  vec3 N = normalize(vec3(-dx * relief, -dy * relief, 0.82));
+  float relief = 16.0 + h * 9.0;
+  vec3 N = normalize(vec3(-dx * relief, -dy * relief, 0.72));
 
   float grain = (fbm(vUv * vec2(uAspect, 1.0) * 90.0 + 8.0) - 0.5);
   float peel = (fbm(vUv * vec2(uAspect, 1.0) * 220.0) - 0.5);
-  N = normalize(N + vec3(grain * 0.42, peel * 0.38, 0.0) * smoothstep(0.04, 0.4, h));
+  N = normalize(N + vec3(grain * 0.28, peel * 0.24, 0.0) * smoothstep(0.08, 0.55, h));
 
   vec3 V = vec3(0.0, 0.0, 1.0);
-  vec3 key = normalize(vec3(-0.32 + sin(uTime * 0.17) * 0.05, 0.58, 0.74));
-  vec3 fill = normalize(vec3(0.62, -0.12, 0.55));
-  vec3 fingerL = normalize(vec3(uLight - vUv, 0.62));
+  vec3 key = normalize(vec3(-0.28 + sin(uTime * 0.17) * 0.04, 0.62, 0.78));
+  vec3 fill = normalize(vec3(0.58, -0.08, 0.62));
+  vec3 fingerL = normalize(vec3(uLight - vUv, 0.7));
 
-  float cover = smoothstep(0.0, 0.03, h);
-  float thick = smoothstep(0.06, 1.2, h);
-  float cavity = clamp(1.0 - ((l + r + b + t) * 0.25 - h) * 2.6, 0.62, 1.0);
+  float cover = smoothstep(0.0, 0.018, h);
+  float body = smoothstep(0.04, 0.28, h);
+  float thick = smoothstep(0.08, 1.35, h);
+  float cavity = clamp(1.0 - ((l + r + b + t) * 0.25 - h) * 2.4, 0.7, 1.0);
 
   vec3 pigment = clamp(dye.rgb, 0.0, 1.0);
-  float luma = dot(pigment, vec3(0.299, 0.587, 0.114));
-  pigment = clamp(mix(vec3(luma), pigment, 1.12), 0.0, 1.0);
+  float pLuma = max(dot(pigment, vec3(0.299, 0.587, 0.114)), 0.04);
 
-  float rough = mix(0.32, 0.045, uGloss);
-  rough = mix(rough, 0.16, peel * 0.5 + 0.5);
-  rough = mix(0.48, rough, cover);
-  rough = clamp(rough - thick * 0.06, 0.03, 0.62);
+  float rough = mix(0.28, 0.038, uGloss);
+  rough = mix(rough, 0.12, peel * 0.5 + 0.5);
+  rough = mix(0.42, rough, cover);
+  rough = clamp(rough - thick * 0.08, 0.028, 0.55);
 
-  vec3 F0 = mix(vec3(0.04), mix(vec3(0.06), pigment * 0.18, 0.25), cover);
+  vec3 F0 = mix(vec3(0.04), vec3(0.055), cover);
 
   vec3 color = vec3(0.0);
 
@@ -497,14 +540,15 @@ void main() {
   lights[1] = fill;
   lights[2] = fingerL;
   float intens[3];
-  intens[0] = 1.15;
-  intens[1] = 0.32;
-  intens[2] = 0.28;
+  intens[0] = 1.05;
+  intens[1] = 0.28;
+  intens[2] = 0.22;
 
   for (int i = 0; i < 3; i++) {
     vec3 L = lights[i];
     vec3 H = normalize(L + V);
     float NdotL = clamp(dot(N, L), 0.0, 1.0);
+    float wrap = clamp(NdotL * 0.72 + 0.28, 0.0, 1.0);
     float NdotV = clamp(dot(N, V), 0.0, 1.0);
     float NdotH = clamp(dot(N, H), 0.0, 1.0);
     float HdotV = clamp(dot(H, V), 0.0, 1.0);
@@ -512,34 +556,41 @@ void main() {
     float D = D_GGX(NdotH, rough);
     float G = G_Smith(NdotV, NdotL, rough);
     vec3 spec = D * G * F / max(4.0 * NdotV * NdotL, 1e-4);
-    vec3 diff = pigment * (0.38 + 0.62 * NdotL);
-    vec3 lightCol = (i == 1) ? vec3(0.88, 0.82, 0.76) : vec3(1.02, 0.99, 0.95);
-    if (i == 2) lightCol = vec3(1.06, 1.02, 0.97);
-    color += (diff * (1.0 - F * 0.35) + spec * (0.55 + 1.1 * uGloss) * thick) * lightCol * intens[i];
+    vec3 diff = pigment * wrap;
+    vec3 sss = pigment * pigment * (1.0 - NdotL) * 0.16 * (1.0 - body * 0.4);
+    vec3 lightCol = (i == 1) ? vec3(0.94, 0.92, 0.9) : vec3(1.0, 0.99, 0.97);
+    if (i == 2) lightCol = vec3(1.03, 1.01, 0.98);
+    color += (diff * (1.0 - F * 0.22) + sss + spec * (0.7 + 1.35 * uGloss) * thick) * lightCol * intens[i];
   }
 
   vec3 R = reflect(-V, N);
   vec3 env = studioEnv(R);
   float NdotV = clamp(dot(N, V), 0.0, 1.0);
   vec3 Fr = F_Schlick(NdotV, F0);
-  color += env * Fr * mix(0.22, 1.15, uGloss) * mix(0.12, 1.0, cover);
+  color += env * Fr * mix(0.05, 0.32, uGloss) * thick;
 
-  float coatRough = 0.028;
+  float coatRough = 0.022;
   vec3 Hc = normalize(key + V);
   float coat = D_GGX(clamp(dot(N, Hc), 0.0, 1.0), coatRough);
-  coat *= F_Schlick(NdotV, vec3(0.1)).x;
-  color += coat * vec3(1.35, 1.26, 1.12) * (0.4 + 1.6 * uGloss) * thick;
+  coat *= F_Schlick(NdotV, vec3(0.12)).x;
+  color += coat * vec3(1.28, 1.24, 1.16) * (0.55 + 1.8 * uGloss) * thick;
+
+  float rimLight = pow(1.0 - NdotV, 2.4) * body;
+  color += pigment * rimLight * 0.12;
 
   vec2 flow = texture(uVelocity, vUv).xy;
   float flowLen = length(flow);
   if (flowLen > 1e-4) {
     vec2 tdir = flow / flowLen;
     float aniso = pow(abs(dot(N.xy, tdir)), 2.0);
-    color += aniso * flowLen * 2.2 * vec3(1.0, 0.97, 0.92) * thick * uGloss * 0.18;
+    color += aniso * flowLen * 2.0 * vec3(1.0, 0.98, 0.95) * thick * uGloss * 0.14;
   }
 
-  color *= cavity;
-  color = mix(color, pigment, 0.22 * cover);
+  color *= mix(1.0, cavity, 0.55);
+  float cLuma = max(dot(color, vec3(0.299, 0.587, 0.114)), 1e-4);
+  vec3 chroma = pigment / pLuma;
+  color = mix(color, chroma * cLuma, 0.78 * body);
+  color = mix(color, pigment, 0.18 * body);
 
   float occlude = 1.0;
   vec2 lxy = key.xy;
@@ -581,9 +632,9 @@ void main() {
 
   if (hit > 0.5) {
     vec3 fcol = shadeFinger(fn, V, key, dye.rgb, wet);
-    float edge = pow(clamp(fn.z, 0.0, 1.0), 0.35);
-    painted = mix(painted * 0.18, fcol, edge);
-    painted += pow(clamp(fn.z, 0.0, 1.0), 16.0) * vec3(1.0, 0.95, 0.9) * 0.28;
+    float edge = pow(clamp(fn.z, 0.0, 1.0), 0.45);
+    painted = mix(painted, mix(painted * 0.55, fcol, 0.82), edge * 0.7);
+    painted += pow(clamp(fn.z, 0.0, 1.0), 18.0) * vec3(1.0, 0.95, 0.9) * 0.16;
   } else {
     float shadow = 0.0;
     if (uFinger0.w > 0.5) {
@@ -606,26 +657,18 @@ void main() {
     vec2 tn = vec2(-td.y, td.x);
     vec2 loc = vec2(dot(tp, td), dot(tp, tn));
     if (kind < 2.5) {
-      float hw = uTool.z * 0.52;
-      float hl = uTool.z * 1.45;
-      float blade = max(abs(loc.x) / hl, abs(loc.y) / hw);
-      if (blade < 1.0) {
-        float edge = 1.0 - blade;
-        vec3 metal = vec3(0.62, 0.64, 0.66);
-        metal += pow(edge, 3.0) * vec3(0.9, 0.92, 0.95) * 0.55;
-        metal *= 0.45 + 0.55 * clamp(dot(vec3(0.15, 0.2, 0.97), key), 0.0, 1.0);
-        painted = mix(painted, metal, smoothstep(0.0, 0.18, edge));
-        painted += pow(clamp(dot(vec3(0.1, 0.25, 0.96), normalize(key + V)), 0.0, 1.0), 70.0) * 0.28 * edge;
-      }
+      float hl = uTool.z * 0.85;
+      float along = 1.0 - smoothstep(hl * 0.72, hl, abs(loc.x));
+      float strip = exp(-pow(loc.y / max(uTool.z * 0.028, 1e-5), 2.0)) * along;
+      painted += vec3(0.92, 0.93, 0.94) * strip * 0.38;
+      float glint = exp(-pow(loc.y / max(uTool.z * 0.012, 1e-5), 2.0)) * along;
+      painted += vec3(1.0, 0.99, 0.97) * glint * 0.22;
     } else {
-      float rad = uTool.z * 0.55;
-      float d = length(vec2(loc.x * 0.35, loc.y));
+      float rad = uTool.z * 0.18;
+      float d = length(vec2(loc.x * 0.22, loc.y));
       if (d < rad) {
-        float z = sqrt(max(rad * rad - d * d, 0.0));
-        vec3 sn = normalize(vec3(loc.y, loc.x * 0.2, z));
-        vec3 wood = vec3(0.45, 0.28, 0.14) * (0.7 + 0.3 * fbm(loc * 40.0));
-        wood *= 0.4 + 0.6 * clamp(dot(sn, key), 0.0, 1.0);
-        painted = mix(painted, wood, smoothstep(0.0, rad * 0.25, rad - d));
+        vec3 wood = vec3(0.42, 0.26, 0.13) * (0.75 + 0.25 * fbm(loc * 40.0));
+        painted = mix(painted, wood, smoothstep(0.0, rad * 0.45, rad - d) * 0.45);
       }
     }
   }
@@ -634,8 +677,10 @@ void main() {
   painted *= 1.0 - dot(q, q) * 0.22;
   painted *= 0.96 + 0.04 * hash(gl_FragCoord.xy);
 
-  painted = aces(painted * 1.05);
-  painted = pow(painted, vec3(0.96));
-  fragColor = vec4(painted, 1.0);
+  float mappedL = max(dot(painted, vec3(0.299, 0.587, 0.114)), 1e-4);
+  vec3 toned = aces(vec3(mappedL)) / max(aces(vec3(mappedL)).x, 1e-4) * painted;
+  painted = mix(painted, toned, 0.35);
+  painted = pow(max(painted, 0.0), vec3(0.97));
+  fragColor = vec4(clamp(painted, 0.0, 1.0), 1.0);
 }
 `

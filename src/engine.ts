@@ -194,6 +194,7 @@ export class PaintEngine {
 
   private splatAdd!: Program
   private splatRadialProg!: Program
+  private splatBladeVelProg!: Program
   private splatPaintProg!: Program
   private displaceHeightProg!: Program
   private displaceBladeProg!: Program
@@ -246,6 +247,7 @@ export class PaintEngine {
 
     this.splatAdd = createProgram(gl, S.vert, S.splatAdd)
     this.splatRadialProg = createProgram(gl, S.vert, S.splatRadial)
+    this.splatBladeVelProg = createProgram(gl, S.vert, S.splatBladeVel)
     this.splatPaintProg = createProgram(gl, S.vert, S.splatPaint)
     this.displaceHeightProg = createProgram(gl, S.vert, S.displaceHeight)
     this.displaceBladeProg = createProgram(gl, S.vert, S.displaceBlade)
@@ -301,8 +303,8 @@ export class PaintEngine {
     this.deleteDouble(this.pressure)
     const coarse =
       this.software || window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 720
-    const sim = getResolution(this.canvas.width, this.canvas.height, this.software ? 128 : coarse ? 224 : 384)
-    const dye = getResolution(this.canvas.width, this.canvas.height, this.software ? 280 : coarse ? 512 : 896)
+    const sim = getResolution(this.canvas.width, this.canvas.height, this.software ? 160 : coarse ? 256 : 384)
+    const dye = getResolution(this.canvas.width, this.canvas.height, this.software ? 384 : coarse ? 640 : 960)
     const velFilter = this.fmt.filter
     this.velocity = createDouble(gl, sim.w, sim.h, this.fmt, velFilter)
     this.dye = createDouble(gl, dye.w, dye.h, this.fmt, this.fmt.filter)
@@ -396,6 +398,33 @@ export class PaintEngine {
     gl.uniform2f(p.uniforms.uPoint, uv[0], uv[1])
     gl.uniform2f(p.uniforms.uDelta, delta[0], delta[1])
     gl.uniform1f(p.uniforms.uRadius, radius)
+    gl.uniform1f(p.uniforms.uAspect, this.aspect)
+    gl.uniform1f(p.uniforms.uPush, push)
+    gl.uniform1f(p.uniforms.uDrag, drag)
+    this.blit(this.velocity.write)
+    this.velocity.swap()
+  }
+
+  nudgeBlade(
+    uv: [number, number],
+    delta: [number, number],
+    dir: [number, number],
+    length: number,
+    width: number,
+    push: number,
+    drag: number,
+  ): void {
+    const gl = this.gl
+    const p = this.splatBladeVelProg
+    gl.useProgram(p.id)
+    gl.uniform1i(p.uniforms.uTarget, 0)
+    gl.activeTexture(gl.TEXTURE0)
+    gl.bindTexture(gl.TEXTURE_2D, this.velocity.read.tex)
+    gl.uniform2f(p.uniforms.uPoint, uv[0], uv[1])
+    gl.uniform2f(p.uniforms.uDelta, delta[0], delta[1])
+    gl.uniform2f(p.uniforms.uDir, dir[0], dir[1])
+    gl.uniform1f(p.uniforms.uLength, length)
+    gl.uniform1f(p.uniforms.uWidth, width)
     gl.uniform1f(p.uniforms.uAspect, this.aspect)
     gl.uniform1f(p.uniforms.uPush, push)
     gl.uniform1f(p.uniforms.uDrag, drag)
