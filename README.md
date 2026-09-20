@@ -38,9 +38,11 @@ npm run preview
 
 ## How to mix
 
-- **Glop** a color onto a blank tray. Hold to pile more. Size runs from dab to dump.
-- **Finger**, **knife**, and **stick** mix what is already there. Knife folds a wide trough; stick stirs a tight eddy.
-- **Viscosity** runs from water through honey to tar.
-- **Scrape** wipes the tray clean.
+- **Glop** — press to squeeze paint onto the empty tray. Hold to pile more. Drag a bead. Size goes from dab to dump.
+- **Finger** — stir and part the pile.
+- **Knife** — palette knife: wide fold, sharp trough, metal blade.
+- **Stick** — thin wooden stir, tight eddy.
+- **Viscosity** — water through honey to tar.
+- **Scrape** — wipe the tray.
 
 Works with mouse, trackpad, and multi-touch. WebGL2 is required.

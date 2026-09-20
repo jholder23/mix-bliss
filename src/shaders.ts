@@ -481,7 +481,7 @@ void main() {
   vec3 fill = normalize(vec3(0.62, -0.12, 0.55));
   vec3 fingerL = normalize(vec3(uLight - vUv, 0.62));
 
-  float cover = smoothstep(0.0, 0.045, h);
+  float cover = smoothstep(0.0, 0.028, h);
   float thick = smoothstep(0.08, 1.35, h);
   float cavity = clamp(1.0 - ((l + r + b + t) * 0.25 - h) * 4.4, 0.28, 1.0);
 
@@ -611,8 +611,8 @@ void main() {
     vec2 tn = vec2(-td.y, td.x);
     vec2 loc = vec2(dot(tp, td), dot(tp, tn));
     if (kind < 2.5) {
-      float hw = uTool.z * 0.38;
-      float hl = uTool.z * 1.15;
+      float hw = uTool.z * 0.52;
+      float hl = uTool.z * 1.45;
       float blade = max(abs(loc.x) / hl, abs(loc.y) / hw);
       if (blade < 1.0) {
         float edge = 1.0 - blade;

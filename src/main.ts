@@ -69,9 +69,9 @@ function sizeName(t: number): string {
 }
 
 function toolRadius(): number {
-  if (tool === 'stick') return feel.fingerRadius * 0.45 * (0.55 + size)
-  if (tool === 'knife') return feel.fingerRadius * 1.55 * (0.6 + size * 0.7)
-  if (tool === 'glop') return feel.dyeRadius * (0.55 + size * 1.35)
+  if (tool === 'stick') return feel.fingerRadius * 0.42 * (0.55 + size)
+  if (tool === 'knife') return feel.fingerRadius * 2.35 * (0.65 + size * 0.85)
+  if (tool === 'glop') return feel.dyeRadius * (0.4 + size * 0.9)
   return feel.fingerRadius * (0.7 + size * 0.7)
 }
 
@@ -91,15 +91,15 @@ function glopAt(uv: [number, number], strength: number): void {
 
 function mixAt(uv: [number, number], delta: [number, number], steps: number): void {
   const radius = toolRadius()
-  const depthScale = tool === 'knife' ? 0.62 : tool === 'stick' ? 0.22 : 0.38
-  const pushScale = tool === 'knife' ? 0.28 : tool === 'stick' ? 1.45 : 0.95
-  const dragScale = tool === 'knife' ? 1.7 : 1
+  const depthScale = tool === 'knife' ? 0.95 : tool === 'stick' ? 0.22 : 0.38
+  const pushScale = tool === 'knife' ? 0.42 : tool === 'stick' ? 1.45 : 0.95
+  const dragScale = tool === 'knife' ? 2.1 : 1
   const depth = (feel.fingerDepth * depthScale) / steps
   const push = (feel.fingerPush * pushScale) / steps
   const drag = feel.splatForce * dragScale
   if (tool === 'knife') {
-    const len = radius * 1.2
-    const width = radius * 0.32
+    const len = radius * 1.35
+    const width = radius * 0.48
     engine.displaceBlade(uv, delta, len, width, depth)
     engine.nudgeRadial(uv, delta, radius, push, drag)
     return
@@ -183,7 +183,7 @@ canvas.addEventListener('pointerdown', (event) => {
   })
   canvas.style.cursor = 'none'
   if (tool === 'glop') {
-    glopAt(uv, 1.15 + size * 0.9)
+    glopAt(uv, 2.15 + size * 1.2)
     audio.blob()
     if (navigator.vibrate) navigator.vibrate(8)
   } else {
@@ -210,7 +210,7 @@ canvas.addEventListener('pointermove', (event) => {
     for (let i = 1; i <= steps; i++) {
       const t = i / steps
       const p: [number, number] = [stroke.prev[0] + dx * t, stroke.prev[1] + dy * t]
-      if (tool === 'glop') glopAt(p, (0.55 + size * 0.5) / steps)
+      if (tool === 'glop') glopAt(p, 0.85 + size * 0.7)
       else mixAt(p, [dx, dy], steps)
     }
     audio.stir(dist * (tool === 'glop' ? 10 : 22))
@@ -270,8 +270,8 @@ function frame(now: number): void {
   if (tool === 'glop') {
     for (const stroke of strokes.values()) {
       if (!stroke.prev) continue
-      if (now - stroke.lastGlop > 48) {
-        glopAt(stroke.prev, 0.28 + size * 0.45)
+      if (now - stroke.lastGlop > 28) {
+        glopAt(stroke.prev, 0.72 + size * 0.7)
         stroke.lastGlop = now
       }
     }
