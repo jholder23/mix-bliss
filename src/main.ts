@@ -233,6 +233,10 @@ scene.onBeforeRenderObservable.add(() => {
   const dt = Math.min(0.033, engine.getDeltaTime() / 1000)
   fluid.step(dt)
   fluid.setGloss(feel.gloss)
+  const mat = fluid.mesh.material
+  if (mat && 'setVector3' in mat) {
+    ;(mat as { setVector3: (n: string, v: Vector3) => void }).setVector3('cameraPosition', camera.position)
+  }
 })
 
 engine.runRenderLoop(() => scene.render())
