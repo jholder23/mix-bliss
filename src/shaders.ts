@@ -438,12 +438,12 @@ void main() {
   vec3 fill = normalize(vec3(0.62, -0.12, 0.55));
   vec3 fingerL = normalize(vec3(uLight - vUv, 0.62));
 
-  vec3 pigment = mix(dye.rgb, pow(max(dye.rgb, vec3(0.0)), vec3(1.28)), 0.4);
-  pigment *= mix(1.0, 0.78, thick * 0.35);
-
   float cover = smoothstep(0.0, 0.11, h);
   float thick = smoothstep(0.12, 1.6, h);
-  float cavity = clamp(1.0 - ( (l+r+b+t) * 0.25 - h) * 2.8, 0.42, 1.0);
+  float cavity = clamp(1.0 - ((l + r + b + t) * 0.25 - h) * 2.8, 0.42, 1.0);
+
+  vec3 pigment = mix(dye.rgb, pow(max(dye.rgb, vec3(0.0)), vec3(1.28)), 0.4);
+  pigment *= mix(1.0, 0.78, thick * 0.35);
 
   float rough = mix(0.38, 0.07, uGloss);
   rough = mix(rough, 0.22, peel * 0.5 + 0.5);
