@@ -140,7 +140,9 @@ function renderShots(): void {
     btn.type = 'button'
     btn.className = 'shot'
     btn.textContent = shot.label
-    btn.addEventListener('click', () => {
+    btn.addEventListener('pointerdown', (event) => {
+      event.preventDefault()
+      event.stopPropagation()
       lookTo(shot)
       hint.classList.add('gone')
     })

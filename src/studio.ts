@@ -255,9 +255,9 @@ export function createStudio(canvas: HTMLCanvasElement): {
   scene.onBeforeRenderObservable.add(() => {
     if (!goal) return
     const wantA = shortestAngle(camera.alpha, goal.alpha)
-    camera.alpha += (wantA - camera.alpha) * 0.1
-    camera.beta += (goal.beta - camera.beta) * 0.1
-    camera.radius += (goal.radius - camera.radius) * 0.1
+    camera.alpha += (wantA - camera.alpha) * 0.22
+    camera.beta += (goal.beta - camera.beta) * 0.22
+    camera.radius += (goal.radius - camera.radius) * 0.22
     if (
       Math.abs(shortestAngle(camera.alpha, goal.alpha) - camera.alpha) < 0.004 &&
       Math.abs(camera.beta - goal.beta) < 0.004 &&
@@ -304,6 +304,9 @@ export function createStudio(canvas: HTMLCanvasElement): {
     tray,
     software,
     lookTo(shot) {
+      camera.inertialAlphaOffset = 0
+      camera.inertialBetaOffset = 0
+      camera.inertialRadiusOffset = 0
       goal = shot
     },
     setToolGhost(kind, pos, dir) {
