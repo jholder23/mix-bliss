@@ -64,13 +64,6 @@ uniform float uRadius;
 uniform float uAspect;
 uniform float uStrength;
 
-vec3 kmMix(vec3 a, float wa, vec3 b, float wb) {
-  vec3 aa = -log(max(a, vec3(0.045)));
-  vec3 ab = -log(max(b, vec3(0.045)));
-  float w = max(wa + wb, 1e-5);
-  return clamp(exp(-(aa * wa + ab * wb) / w), 0.0, 1.0);
-}
-
 float hash(vec2 p) {
   return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
 }
@@ -80,14 +73,15 @@ void main() {
   p.x *= uAspect;
   float r = max(uRadius, 1e-5);
   float ang = atan(p.y, p.x);
-  float wobble = 0.84 + 0.12 * sin(ang * 4.0 + hash(uPoint) * 6.28) + 0.08 * hash(p * 18.0 + uPoint);
+  float wobble = 0.88 + 0.1 * sin(ang * 3.0 + hash(uPoint) * 6.28) + 0.05 * hash(p * 14.0 + uPoint);
   float t = clamp(1.0 - length(p) / (r * wobble), 0.0, 1.0);
-  float dome = pow(t, 1.75) * mix(0.55, 1.15, t);
+  float dome = pow(t, 1.65);
   float add = dome * uStrength;
   vec4 base = texture(uTarget, vUv);
   float newA = min(base.a + add, 3.4);
-  vec3 mixed = kmMix(base.rgb, max(base.a, 0.001), uColor, add);
-  if (base.a < 0.002) mixed = uColor;
+  float lay = clamp(add * 2.2, 0.0, 1.0);
+  vec3 mixed = mix(base.rgb, uColor, lay);
+  if (base.a < 0.02) mixed = uColor;
   fragColor = vec4(mixed, newA);
 }
 `
@@ -481,12 +475,13 @@ void main() {
   vec3 fill = normalize(vec3(0.62, -0.12, 0.55));
   vec3 fingerL = normalize(vec3(uLight - vUv, 0.62));
 
-  float cover = smoothstep(0.0, 0.028, h);
-  float thick = smoothstep(0.08, 1.35, h);
-  float cavity = clamp(1.0 - ((l + r + b + t) * 0.25 - h) * 4.4, 0.28, 1.0);
+  float cover = smoothstep(0.0, 0.03, h);
+  float thick = smoothstep(0.06, 1.2, h);
+  float cavity = clamp(1.0 - ((l + r + b + t) * 0.25 - h) * 2.6, 0.62, 1.0);
 
-  vec3 pigment = mix(dye.rgb, pow(max(dye.rgb, vec3(0.0)), vec3(1.28)), 0.4);
-  pigment *= mix(1.0, 0.78, thick * 0.35);
+  vec3 pigment = clamp(dye.rgb, 0.0, 1.0);
+  float luma = dot(pigment, vec3(0.299, 0.587, 0.114));
+  pigment = clamp(mix(vec3(luma), pigment, 1.12), 0.0, 1.0);
 
   float rough = mix(0.32, 0.045, uGloss);
   rough = mix(rough, 0.16, peel * 0.5 + 0.5);
@@ -502,9 +497,9 @@ void main() {
   lights[1] = fill;
   lights[2] = fingerL;
   float intens[3];
-  intens[0] = 2.05;
-  intens[1] = 0.28;
-  intens[2] = 0.72;
+  intens[0] = 1.15;
+  intens[1] = 0.32;
+  intens[2] = 0.28;
 
   for (int i = 0; i < 3; i++) {
     vec3 L = lights[i];
@@ -517,10 +512,10 @@ void main() {
     float D = D_GGX(NdotH, rough);
     float G = G_Smith(NdotV, NdotL, rough);
     vec3 spec = D * G * F / max(4.0 * NdotV * NdotL, 1e-4);
-    vec3 diff = (1.0 - F) * pigment / PI;
-    vec3 lightCol = (i == 1) ? vec3(0.85, 0.78, 0.7) : vec3(1.05, 0.98, 0.9);
-    if (i == 2) lightCol = vec3(1.1, 1.04, 0.95);
-    color += (diff + spec * (0.9 + 1.8 * uGloss)) * NdotL * lightCol * intens[i];
+    vec3 diff = pigment * (0.38 + 0.62 * NdotL);
+    vec3 lightCol = (i == 1) ? vec3(0.88, 0.82, 0.76) : vec3(1.02, 0.99, 0.95);
+    if (i == 2) lightCol = vec3(1.06, 1.02, 0.97);
+    color += (diff * (1.0 - F * 0.35) + spec * (0.55 + 1.1 * uGloss) * thick) * lightCol * intens[i];
   }
 
   vec3 R = reflect(-V, N);
@@ -544,7 +539,7 @@ void main() {
   }
 
   color *= cavity;
-  color += pigment * vec3(1.0, 0.25, 0.08) * pow(1.0 - NdotV, 2.4) * 0.12 * thick;
+  color = mix(color, pigment, 0.22 * cover);
 
   float occlude = 1.0;
   vec2 lxy = key.xy;
@@ -639,7 +634,7 @@ void main() {
   painted *= 1.0 - dot(q, q) * 0.22;
   painted *= 0.96 + 0.04 * hash(gl_FragCoord.xy);
 
-  painted = aces(painted * 1.32);
+  painted = aces(painted * 1.05);
   painted = pow(painted, vec3(0.96));
   fragColor = vec4(painted, 1.0);
 }

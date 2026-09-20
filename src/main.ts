@@ -83,10 +83,7 @@ function toUv(event: PointerEvent): [number, number] {
 }
 
 function glopAt(uv: [number, number], strength: number): void {
-  const radius = toolRadius()
-  const color = hexToRgb(selected.hex)
-  engine.splatPaint(uv, color, radius, strength)
-  engine.nudgeRadial(uv, [(Math.random() - 0.5) * 0.04, -0.02], radius * 0.7, 0.08, 0.18)
+  engine.splatPaint(uv, hexToRgb(selected.hex), toolRadius(), strength)
 }
 
 function mixAt(uv: [number, number], delta: [number, number], steps: number): void {
@@ -178,12 +175,12 @@ canvas.addEventListener('pointerdown', (event) => {
     prev: uv,
     moved: 0,
     started: performance.now(),
-    lastGlop: 0,
+    lastGlop: performance.now(),
     dir: [1, 0],
   })
   canvas.style.cursor = 'none'
   if (tool === 'glop') {
-    glopAt(uv, 2.15 + size * 1.2)
+    glopAt(uv, 1.55 + size * 0.85)
     audio.blob()
     if (navigator.vibrate) navigator.vibrate(8)
   } else {
@@ -206,14 +203,23 @@ canvas.addEventListener('pointermove', (event) => {
     stroke.moved += dist
     if (dist > 1e-5) stroke.dir = [dx, dy]
     const radius = toolRadius()
-    const steps = Math.max(1, Math.ceil(dist / (radius * 0.22)))
-    for (let i = 1; i <= steps; i++) {
-      const t = i / steps
-      const p: [number, number] = [stroke.prev[0] + dx * t, stroke.prev[1] + dy * t]
-      if (tool === 'glop') glopAt(p, 0.85 + size * 0.7)
-      else mixAt(p, [dx, dy], steps)
+    const steps = Math.max(1, Math.ceil(dist / (radius * 0.28)))
+    if (tool === 'glop') {
+      if (dist > 0.01) {
+        for (let i = 1; i <= steps; i++) {
+          const t = i / steps
+          const p: [number, number] = [stroke.prev[0] + dx * t, stroke.prev[1] + dy * t]
+          glopAt(p, (0.35 + size * 0.25) / steps)
+        }
+      }
+    } else if (dist > 0.002) {
+      for (let i = 1; i <= steps; i++) {
+        const t = i / steps
+        const p: [number, number] = [stroke.prev[0] + dx * t, stroke.prev[1] + dy * t]
+        mixAt(p, [dx, dy], steps)
+      }
+      audio.stir(dist * 22)
     }
-    audio.stir(dist * (tool === 'glop' ? 10 : 22))
   }
   stroke.prev = uv
 })
@@ -270,8 +276,9 @@ function frame(now: number): void {
   if (tool === 'glop') {
     for (const stroke of strokes.values()) {
       if (!stroke.prev) continue
-      if (now - stroke.lastGlop > 28) {
-        glopAt(stroke.prev, 0.72 + size * 0.7)
+      if (stroke.moved > 0.012) continue
+      if (now - stroke.lastGlop > 110) {
+        glopAt(stroke.prev, 0.22 + size * 0.18)
         stroke.lastGlop = now
       }
     }
