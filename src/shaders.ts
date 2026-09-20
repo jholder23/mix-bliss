@@ -111,9 +111,10 @@ void main() {
     fragColor = texture(uTarget, vUv);
     return;
   }
-  float hemi = sqrt(max(1.0 - nd * nd, 0.0));
-  float bead = exp(-pow(nd - 0.9, 2.0) / 0.01) * 0.1;
-  float add = (hemi * 1.05 + bead) * uStrength;
+  float t = clamp(1.0 - nd, 0.0, 1.0);
+  float dome = pow(t, 0.72);
+  float bead = exp(-pow(nd - 0.88, 2.0) / 0.012) * 0.08;
+  float add = (dome * 1.2 + bead) * uStrength;
   vec4 base = texture(uTarget, vUv);
   float newA = min(base.a + add, 3.6);
   vec3 mixed = uColor;
@@ -506,32 +507,33 @@ void main() {
 
   float dx = (tr + 2.0 * r + br) - (tl + 2.0 * l + bl);
   float dy = (bl + 2.0 * b + br) - (tl + 2.0 * t + tr);
-  float relief = 16.0 + h * 9.0;
-  vec3 N = normalize(vec3(-dx * relief, -dy * relief, 0.72));
+  float relief = 7.5 + h * 4.0;
+  vec3 N = normalize(vec3(-dx * relief, -dy * relief, 1.15));
+  N.z = max(N.z, 0.42);
+  N = normalize(N);
 
   float grain = (fbm(vUv * vec2(uAspect, 1.0) * 90.0 + 8.0) - 0.5);
   float peel = (fbm(vUv * vec2(uAspect, 1.0) * 220.0) - 0.5);
-  N = normalize(N + vec3(grain * 0.28, peel * 0.24, 0.0) * smoothstep(0.08, 0.55, h));
+  N = normalize(N + vec3(grain * 0.18, peel * 0.16, 0.0) * smoothstep(0.12, 0.6, h));
 
   vec3 V = vec3(0.0, 0.0, 1.0);
-  vec3 key = normalize(vec3(-0.28 + sin(uTime * 0.17) * 0.04, 0.62, 0.78));
-  vec3 fill = normalize(vec3(0.58, -0.08, 0.62));
-  vec3 fingerL = normalize(vec3(uLight - vUv, 0.7));
+  vec3 key = normalize(vec3(-0.24 + sin(uTime * 0.17) * 0.03, 0.64, 0.82));
+  vec3 fill = normalize(vec3(0.52, -0.04, 0.68));
+  vec3 fingerL = normalize(vec3(uLight - vUv, 0.78));
 
-  float cover = smoothstep(0.0, 0.018, h);
-  float body = smoothstep(0.04, 0.28, h);
-  float thick = smoothstep(0.08, 1.35, h);
-  float cavity = clamp(1.0 - ((l + r + b + t) * 0.25 - h) * 2.4, 0.7, 1.0);
+  float cover = smoothstep(0.0, 0.016, h);
+  float body = smoothstep(0.03, 0.22, h);
+  float thick = smoothstep(0.06, 1.2, h);
+  float cavity = clamp(1.0 - ((l + r + b + t) * 0.25 - h) * 1.8, 0.82, 1.0);
 
   vec3 pigment = clamp(dye.rgb, 0.0, 1.0);
-  float pLuma = max(dot(pigment, vec3(0.299, 0.587, 0.114)), 0.04);
 
-  float rough = mix(0.28, 0.038, uGloss);
-  rough = mix(rough, 0.12, peel * 0.5 + 0.5);
-  rough = mix(0.42, rough, cover);
-  rough = clamp(rough - thick * 0.08, 0.028, 0.55);
+  float rough = mix(0.24, 0.04, uGloss);
+  rough = mix(rough, 0.1, peel * 0.5 + 0.5);
+  rough = mix(0.36, rough, cover);
+  rough = clamp(rough - thick * 0.06, 0.03, 0.5);
 
-  vec3 F0 = mix(vec3(0.04), vec3(0.055), cover);
+  vec3 F0 = vec3(0.045);
 
   vec3 color = vec3(0.0);
 
@@ -540,15 +542,15 @@ void main() {
   lights[1] = fill;
   lights[2] = fingerL;
   float intens[3];
-  intens[0] = 1.05;
-  intens[1] = 0.28;
-  intens[2] = 0.22;
+  intens[0] = 0.72;
+  intens[1] = 0.22;
+  intens[2] = 0.16;
 
   for (int i = 0; i < 3; i++) {
     vec3 L = lights[i];
     vec3 H = normalize(L + V);
     float NdotL = clamp(dot(N, L), 0.0, 1.0);
-    float wrap = clamp(NdotL * 0.72 + 0.28, 0.0, 1.0);
+    float wrap = clamp(NdotL * 0.4 + 0.68, 0.0, 1.2);
     float NdotV = clamp(dot(N, V), 0.0, 1.0);
     float NdotH = clamp(dot(N, H), 0.0, 1.0);
     float HdotV = clamp(dot(H, V), 0.0, 1.0);
@@ -557,40 +559,33 @@ void main() {
     float G = G_Smith(NdotV, NdotL, rough);
     vec3 spec = D * G * F / max(4.0 * NdotV * NdotL, 1e-4);
     vec3 diff = pigment * wrap;
-    vec3 sss = pigment * pigment * (1.0 - NdotL) * 0.16 * (1.0 - body * 0.4);
-    vec3 lightCol = (i == 1) ? vec3(0.94, 0.92, 0.9) : vec3(1.0, 0.99, 0.97);
-    if (i == 2) lightCol = vec3(1.03, 1.01, 0.98);
-    color += (diff * (1.0 - F * 0.22) + sss + spec * (0.7 + 1.35 * uGloss) * thick) * lightCol * intens[i];
+    vec3 lightCol = (i == 1) ? vec3(0.96, 0.95, 0.93) : vec3(1.0, 0.995, 0.98);
+    if (i == 2) lightCol = vec3(1.02, 1.01, 0.99);
+    color += (diff * (1.0 - F * 0.12) + spec * (0.85 + 1.4 * uGloss) * thick) * lightCol * intens[i];
   }
 
   vec3 R = reflect(-V, N);
   vec3 env = studioEnv(R);
   float NdotV = clamp(dot(N, V), 0.0, 1.0);
   vec3 Fr = F_Schlick(NdotV, F0);
-  color += env * Fr * mix(0.05, 0.32, uGloss) * thick;
+  color += env * Fr * mix(0.03, 0.22, uGloss) * thick;
 
-  float coatRough = 0.022;
+  float coatRough = 0.02;
   vec3 Hc = normalize(key + V);
   float coat = D_GGX(clamp(dot(N, Hc), 0.0, 1.0), coatRough);
-  coat *= F_Schlick(NdotV, vec3(0.12)).x;
-  color += coat * vec3(1.28, 1.24, 1.16) * (0.55 + 1.8 * uGloss) * thick;
+  coat *= F_Schlick(NdotV, vec3(0.1)).x;
+  color += coat * vec3(1.2, 1.18, 1.12) * (0.45 + 1.6 * uGloss) * thick;
 
-  float rimLight = pow(1.0 - NdotV, 2.4) * body;
-  color += pigment * rimLight * 0.12;
+  color *= mix(1.0, cavity, 0.28);
+  color = mix(pigment * 0.92, color, 0.55 + 0.45 * body);
 
   vec2 flow = texture(uVelocity, vUv).xy;
   float flowLen = length(flow);
   if (flowLen > 1e-4) {
     vec2 tdir = flow / flowLen;
     float aniso = pow(abs(dot(N.xy, tdir)), 2.0);
-    color += aniso * flowLen * 2.0 * vec3(1.0, 0.98, 0.95) * thick * uGloss * 0.14;
+    color += aniso * flowLen * 1.6 * vec3(1.0) * thick * uGloss * 0.1;
   }
-
-  color *= mix(1.0, cavity, 0.55);
-  float cLuma = max(dot(color, vec3(0.299, 0.587, 0.114)), 1e-4);
-  vec3 chroma = pigment / pLuma;
-  color = mix(color, chroma * cLuma, 0.78 * body);
-  color = mix(color, pigment, 0.18 * body);
 
   float occlude = 1.0;
   vec2 lxy = key.xy;
@@ -617,9 +612,9 @@ void main() {
   trayN = normalize(trayN);
   ceramic *= 0.48 + 0.52 * clamp(dot(trayN, key), 0.0, 1.0);
   ceramic += pow(clamp(dot(trayN, normalize(key + V)), 0.0, 1.0), 80.0) * vec3(1.0, 0.97, 0.92) * 0.08;
-  float rimAO = smoothstep(0.22, 0.0, h) * smoothstep(0.0, 0.08, h);
-  ceramic *= 1.0 - rimAO * 0.38;
-  ceramic *= 1.0 - (1.0 - cavity) * 0.22 * cover;
+  float rimAO = smoothstep(0.16, 0.0, h) * smoothstep(0.0, 0.05, h);
+  ceramic *= 1.0 - rimAO * 0.22;
+  ceramic *= 1.0 - (1.0 - cavity) * 0.12 * cover;
 
   vec3 painted = mix(ceramic, color, cover);
   painted += env * 0.04 * (1.0 - cover);
@@ -677,10 +672,8 @@ void main() {
   painted *= 1.0 - dot(q, q) * 0.22;
   painted *= 0.96 + 0.04 * hash(gl_FragCoord.xy);
 
-  float mappedL = max(dot(painted, vec3(0.299, 0.587, 0.114)), 1e-4);
-  vec3 toned = aces(vec3(mappedL)) / max(aces(vec3(mappedL)).x, 1e-4) * painted;
-  painted = mix(painted, toned, 0.35);
-  painted = pow(max(painted, 0.0), vec3(0.97));
-  fragColor = vec4(clamp(painted, 0.0, 1.0), 1.0);
+  painted = clamp(painted, 0.0, 1.0);
+  painted = pow(painted, vec3(0.98));
+  fragColor = vec4(painted, 1.0);
 }
 `

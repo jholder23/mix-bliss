@@ -18,6 +18,7 @@ const viscosityEl = must(document.querySelector<HTMLInputElement>('#viscosity'),
 const viscLabel = must(document.querySelector<HTMLElement>('#visc-label'), 'visc-label')
 const sizeEl = must(document.querySelector<HTMLInputElement>('#size'), 'size')
 const sizeLabel = must(document.querySelector<HTMLElement>('#size-label'), 'size-label')
+const tubeName = must(document.querySelector<HTMLParagraphElement>('#tube-name'), 'tube-name')
 const scrapeBtn = must(document.querySelector<HTMLButtonElement>('#scrape'), 'scrape')
 const soundBtn = must(document.querySelector<HTMLButtonElement>('#sound'), 'sound')
 const toolButtons = {
@@ -112,6 +113,8 @@ function setTool(next: Tool): void {
     btn.classList.toggle('on', on)
     btn.setAttribute('aria-pressed', on ? 'true' : 'false')
   }
+  tubeName.textContent =
+    next === 'glop' ? `${selected.name} ready to glop.` : `${next} folds paint. It does not dump color.`
 }
 
 function renderSwatches(): void {
@@ -151,6 +154,7 @@ function renderSwatches(): void {
   wrap.append(picker)
   if (selected.name === 'Custom') wrap.style.borderColor = '#fff'
   swatchesEl.append(wrap)
+  if (tool === 'glop') tubeName.textContent = `${selected.name} ready to glop.`
 }
 
 function applyViscosity(raw: number): void {
