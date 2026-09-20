@@ -9,6 +9,13 @@ import {
   VertexBuffer,
   type Scene,
 } from '@babylonjs/core'
+import {
+  BANDS,
+  accumulatedKSToSrgb,
+  mixKSSlots,
+  writePigmentSlot,
+  type Pigment,
+} from './km'
 import { createPaintMaterial } from './paintShader'
 import type { SimFeel } from './paints'
 
@@ -25,19 +32,24 @@ export class PaintFluid {
   readonly mesh: Mesh
   private pos: Float32Array
   private prev: Float32Array
-  private col: Float32Array
+  private k: Float32Array
+  private s: Float32Array
   private rad: Float32Array
   private live: Uint8Array
   private count = 0
   private cap: number
   private hash: number[][] = []
-  private cell = 0.22
+  private cell = 0.2
   private heights: Float32Array
   private weight: Float32Array
-  private cr: Float32Array
-  private cg: Float32Array
-  private cb: Float32Array
+  private kAcc: Float32Array
+  private sAcc: Float32Array
   private rgba: Uint8Array
+  private tmpH: Float32Array
+  private tmpR: Float32Array
+  private tmpG: Float32Array
+  private tmpB: Float32Array
+  private tmpW: Float32Array
   private base: Float32Array
   private verts: Float32Array
   private map: RawTexture
@@ -48,23 +60,28 @@ export class PaintFluid {
   constructor(scene: Scene, feel: SimFeel, software: boolean) {
     this.feel = feel
     this.software = software
-    this.cap = software ? 180 : 380
+    this.cap = software ? 220 : 460
     this.pos = new Float32Array(this.cap * 3)
     this.prev = new Float32Array(this.cap * 3)
-    this.col = new Float32Array(this.cap * 3)
+    this.k = new Float32Array(this.cap * BANDS)
+    this.s = new Float32Array(this.cap * BANDS)
     this.rad = new Float32Array(this.cap)
     this.live = new Uint8Array(this.cap)
 
-    this.res = software ? 112 : 176
+    this.res = software ? 128 : 192
     const n = this.res * this.res
     this.heights = new Float32Array(n)
     this.weight = new Float32Array(n)
-    this.cr = new Float32Array(n)
-    this.cg = new Float32Array(n)
-    this.cb = new Float32Array(n)
+    this.kAcc = new Float32Array(n * BANDS)
+    this.sAcc = new Float32Array(n * BANDS)
     this.rgba = new Uint8Array(n * 4)
+    this.tmpH = new Float32Array(n)
+    this.tmpR = new Float32Array(n)
+    this.tmpG = new Float32Array(n)
+    this.tmpB = new Float32Array(n)
+    this.tmpW = new Float32Array(n)
 
-    const subdiv = software ? 72 : 118
+    const subdiv = software ? 80 : 128
     this.mesh = MeshBuilder.CreateGround(
       'paintSurf',
       { width: TRAY_R * 2, height: TRAY_R * 2, subdivisions: subdiv, updatable: true },
@@ -115,12 +132,21 @@ export class PaintFluid {
     this.live.fill(0)
     this.count = 0
     this.heights.fill(0)
+    this.weight.fill(0)
+    this.kAcc.fill(0)
+    this.sAcc.fill(0)
+    this.k.fill(0)
+    this.s.fill(0)
     this.rgba.fill(0)
     this.map.update(this.rgba)
     this.rebuildSurface()
   }
 
-  private spawnOne(x: number, y: number, z: number, rgb: [number, number, number], radius: number): void {
+  get particleCount(): number {
+    return this.getParticleCount()
+  }
+
+  private spawnOne(x: number, y: number, z: number, pigment: Pigment, radius: number): void {
     let slot = -1
     if (this.count < this.cap) {
       slot = this.count++
@@ -140,27 +166,26 @@ export class PaintFluid {
     this.prev[i3] = x
     this.prev[i3 + 1] = y
     this.prev[i3 + 2] = z
-    this.col[i3] = rgb[0]
-    this.col[i3 + 1] = rgb[1]
-    this.col[i3 + 2] = rgb[2]
+    writePigmentSlot(this.k, this.s, slot, pigment)
     this.rad[slot] = radius
     this.live[slot] = 1
   }
 
-  glop(at: Vector3, rgb: [number, number, number], size: number): void {
-    const n = Math.round(28 + size * 52)
-    const moundR = 0.26 + size * 0.4
-    const pr = 0.1 + size * 0.055
+  glop(at: Vector3, pigment: Pigment, size: number): void {
+    const n = Math.round(42 + size * 68)
+    const moundR = 0.3 + size * 0.4
+    const moundH = 0.26 + size * 0.4
+    const pr = 0.12 + size * 0.05
     const gold = Math.PI * (3 - Math.sqrt(5))
     for (let i = 0; i < n; i++) {
       const u = (i + 0.5) / n
-      const rr = moundR * Math.sqrt(u)
+      const yFrac = Math.pow(1 - u, 0.62)
+      const rr = moundR * Math.sqrt(Math.max(0, 1 - yFrac * yFrac))
       const theta = i * gold
       const x = at.x + Math.cos(theta) * rr
       const z = at.z + Math.sin(theta) * rr
-      const dome = Math.sqrt(Math.max(0, 1 - (rr / moundR) * (rr / moundR)))
-      const y = trayHeight(x, z) + dome * (0.28 + size * 0.38) + pr * 0.35
-      this.spawnOne(x, y, z, rgb, pr * (0.88 + Math.random() * 0.18))
+      const y = trayHeight(x, z) + yFrac * moundH + pr * 0.45
+      this.spawnOne(x, y, z, pigment, pr * (0.9 + Math.random() * 0.14))
     }
   }
 
@@ -182,9 +207,9 @@ export class PaintFluid {
       this.pos[i3 + 1] -= flatten * w * (this.rad[i] ?? 0.1)
       if (kind === 'knife') {
         const side = dx * delta.z - dz * delta.x
-        const s = side === 0 ? 1 : Math.sign(side)
-        this.pos[i3] += -delta.z * 0.42 * w * s
-        this.pos[i3 + 2] += delta.x * 0.42 * w * s
+        const sign = side === 0 ? 1 : Math.sign(side)
+        this.pos[i3] += -delta.z * 0.42 * w * sign
+        this.pos[i3 + 2] += delta.x * 0.42 * w * sign
       }
     }
   }
@@ -209,8 +234,10 @@ export class PaintFluid {
     }
 
     this.rebuildHash()
-    const iters = this.software ? Math.min(4, feel.iterations) : feel.iterations
+    const iters = this.software ? Math.min(5, feel.iterations) : feel.iterations
     for (let k = 0; k < iters; k++) this.solve()
+    this.blendPigment()
+    this.viscousBlend()
     this.splat()
     this.rebuildSurface()
   }
@@ -262,9 +289,9 @@ export class PaintFluid {
       const rr = Math.hypot(this.pos[i3], this.pos[i3 + 2])
       const lim = TRAY_R - ri * 0.8
       if (rr > lim) {
-        const s = lim / rr
-        this.pos[i3] *= s
-        this.pos[i3 + 2] *= s
+        const scale = lim / rr
+        this.pos[i3] *= scale
+        this.pos[i3 + 2] *= scale
       }
 
       this.neighbors(i, near)
@@ -289,34 +316,86 @@ export class PaintFluid {
           this.pos[j3 + 1] += ny * push * 0.65
           this.pos[j3 + 2] += nz * push
           const mix = feel.mix * (1 - dist / rest)
-          this.col[i3] += (this.col[j3] - this.col[i3]) * mix
-          this.col[i3 + 1] += (this.col[j3 + 1] - this.col[i3 + 1]) * mix
-          this.col[i3 + 2] += (this.col[j3 + 2] - this.col[i3 + 2]) * mix
-          this.col[j3] += (this.col[i3] - this.col[j3]) * mix
-          this.col[j3 + 1] += (this.col[i3 + 1] - this.col[j3 + 1]) * mix
-          this.col[j3 + 2] += (this.col[i3 + 2] - this.col[j3 + 2]) * mix
-        } else if (dist < rest * 2.0) {
-          const pull = feel.cohesion * (dist - rest) * 0.02
+          mixKSSlots(this.k, this.s, i, j, ri * ri * ri, rj * rj * rj, mix)
+        } else if (dist < rest * 2.55) {
+          const pull = feel.cohesion * (dist - rest) * 0.07
           const nx = dx / dist
           const ny = dy / dist
           const nz = dz / dist
           this.pos[i3] += nx * pull
-          this.pos[i3 + 1] += ny * pull
+          this.pos[i3 + 1] += ny * pull * 1.15
           this.pos[i3 + 2] += nz * pull
           this.pos[j3] -= nx * pull
-          this.pos[j3 + 1] -= ny * pull
+          this.pos[j3 + 1] -= ny * pull * 1.15
           this.pos[j3 + 2] -= nz * pull
         }
       }
     }
   }
 
+  /** Fold pigment in K/S space — mix tools never spawn paint, they only homogenize. */
+  private blendPigment(): void {
+    const rate = this.feel.mix * 0.32
+    if (rate <= 1e-6) return
+    const near: number[] = []
+    for (let i = 0; i < this.count; i++) {
+      if (!this.live[i]) continue
+      this.neighbors(i, near)
+      const ri = this.rad[i] ?? 0.1
+      const i3 = i * 3
+      for (const j of near) {
+        if (j <= i || !this.live[j]) continue
+        const j3 = j * 3
+        const dx = (this.pos[j3] ?? 0) - (this.pos[i3] ?? 0)
+        const dy = (this.pos[j3 + 1] ?? 0) - (this.pos[i3 + 1] ?? 0)
+        const dz = (this.pos[j3 + 2] ?? 0) - (this.pos[i3 + 2] ?? 0)
+        const dist = Math.hypot(dx, dy, dz) + 1e-6
+        const rj = this.rad[j] ?? 0.1
+        const reach = (ri + rj) * 1.85
+        if (dist > reach) continue
+        mixKSSlots(this.k, this.s, i, j, ri * ri * ri, rj * rj * rj, rate * (1 - dist / reach))
+      }
+    }
+  }
+
+  private viscousBlend(): void {
+    const amt = 0.16 + this.feel.damping * 0.18
+    const near: number[] = []
+    for (let i = 0; i < this.count; i++) {
+      if (!this.live[i]) continue
+      this.neighbors(i, near)
+      if (near.length === 0) continue
+      const i3 = i * 3
+      const vx = this.pos[i3] - this.prev[i3]
+      const vy = this.pos[i3 + 1] - this.prev[i3 + 1]
+      const vz = this.pos[i3 + 2] - this.prev[i3 + 2]
+      let ax = 0
+      let ay = 0
+      let az = 0
+      let c = 0
+      for (const j of near) {
+        if (!this.live[j]) continue
+        const j3 = j * 3
+        ax += this.pos[j3] - this.prev[j3]
+        ay += this.pos[j3 + 1] - this.prev[j3 + 1]
+        az += this.pos[j3 + 2] - this.prev[j3 + 2]
+        c++
+      }
+      if (!c) continue
+      ax /= c
+      ay /= c
+      az /= c
+      this.prev[i3] = this.pos[i3] - (vx + (ax - vx) * amt)
+      this.prev[i3 + 1] = this.pos[i3 + 1] - (vy + (ay - vy) * amt)
+      this.prev[i3 + 2] = this.pos[i3 + 2] - (vz + (az - vz) * amt)
+    }
+  }
+
   private splat(): void {
     this.heights.fill(0)
     this.weight.fill(0)
-    this.cr.fill(0)
-    this.cg.fill(0)
-    this.cb.fill(0)
+    this.kAcc.fill(0)
+    this.sAcc.fill(0)
     const res = this.res
     const worldTo = res / (TRAY_R * 2)
     const n = this.count
@@ -326,7 +405,8 @@ export class PaintFluid {
       const px = this.pos[i3]
       const py = this.pos[i3 + 1]
       const pz = this.pos[i3 + 2]
-      const r = (this.rad[i] ?? 0.1) * 1.55
+      const rad = this.rad[i] ?? 0.1
+      const r = rad * 2.25
       const r2 = r * r
       const tx = (px + TRAY_R) * worldTo
       const tz = (pz + TRAY_R) * worldTo
@@ -335,40 +415,41 @@ export class PaintFluid {
       const x1 = Math.min(res - 1, Math.ceil(tx + pr + 1))
       const z0 = Math.max(0, Math.floor(tz - pr - 1))
       const z1 = Math.min(res - 1, Math.ceil(tz + pr + 1))
-      const prr = this.col[i3] ?? 1
-      const pgg = this.col[i3 + 1] ?? 1
-      const pbb = this.col[i3 + 2] ?? 1
+      const kOff = i * BANDS
       for (let iz = z0; iz <= z1; iz++) {
         for (let ix = x0; ix <= x1; ix++) {
           const wx = ix / worldTo - TRAY_R
           const wz = iz / worldTo - TRAY_R
           const d2 = (wx - px) * (wx - px) + (wz - pz) * (wz - pz)
           if (d2 > r2) continue
-          const env = Math.sqrt(r2 - d2)
-          const yTop = py + env
-          const extra = Math.max(0, yTop - trayHeight(wx, wz))
+          const t = 1 - d2 / r2
+          const extra = Math.max(0, py + rad * 1.15 * t - trayHeight(wx, wz))
+          if (extra <= 0) continue
           if (Math.hypot(wx, wz) > TRAY_R - 0.04) continue
           const idx = iz * res + ix
           if (extra > (this.heights[idx] ?? 0)) this.heights[idx] = extra
-          const w = env
-          this.weight[idx] = (this.weight[idx] ?? 0) + w
-          this.cr[idx] = (this.cr[idx] ?? 0) + prr * w
-          this.cg[idx] = (this.cg[idx] ?? 0) + pgg * w
-          this.cb[idx] = (this.cb[idx] ?? 0) + pbb * w
+          const mass = extra
+          this.weight[idx] = (this.weight[idx] ?? 0) + mass
+          const acc = idx * BANDS
+          for (let b = 0; b < BANDS; b++) {
+            this.kAcc[acc + b] = (this.kAcc[acc + b] ?? 0) + (this.k[kOff + b] ?? 0) * mass
+            this.sAcc[acc + b] = (this.sAcc[acc + b] ?? 0) + (this.s[kOff + b] ?? 0) * mass
+          }
         }
       }
     }
 
+    this.softenField()
     const rgba = this.rgba
-    const inv = 1 / HEIGHT_SCALE
+    const invH = 1 / HEIGHT_SCALE
     for (let i = 0; i < this.heights.length; i++) {
-      const w = this.weight[i] ?? 0
+      const w = this.tmpW[i] ?? 0
       const o = i * 4
       if (w > 1e-5) {
-        rgba[o] = Math.min(255, Math.round(((this.cr[i] ?? 0) / w) * 255))
-        rgba[o + 1] = Math.min(255, Math.round(((this.cg[i] ?? 0) / w) * 255))
-        rgba[o + 2] = Math.min(255, Math.round(((this.cb[i] ?? 0) / w) * 255))
-        rgba[o + 3] = Math.min(255, Math.round((this.heights[i] ?? 0) * inv * 255))
+        rgba[o] = Math.min(255, Math.round((this.tmpR[i] ?? 0) * 255))
+        rgba[o + 1] = Math.min(255, Math.round((this.tmpG[i] ?? 0) * 255))
+        rgba[o + 2] = Math.min(255, Math.round((this.tmpB[i] ?? 0) * 255))
+        rgba[o + 3] = Math.min(255, Math.round((this.tmpH[i] ?? 0) * invH * 255))
       } else {
         rgba[o] = 0
         rgba[o + 1] = 0
@@ -379,10 +460,66 @@ export class PaintFluid {
     this.map.update(this.rgba)
   }
 
+  private softenField(): void {
+    const res = this.res
+    const srcH = this.heights
+    const srcW = this.weight
+    for (let i = 0; i < srcH.length; i++) {
+      const w = srcW[i] ?? 0
+      if (w > 1e-5) {
+        const rgb = accumulatedKSToSrgb(this.kAcc, this.sAcc, i, w)
+        this.tmpR[i] = rgb[0]
+        this.tmpG[i] = rgb[1]
+        this.tmpB[i] = rgb[2]
+        this.tmpH[i] = srcH[i] ?? 0
+        this.tmpW[i] = w
+      } else {
+        this.tmpR[i] = 0
+        this.tmpG[i] = 0
+        this.tmpB[i] = 0
+        this.tmpH[i] = 0
+        this.tmpW[i] = 0
+      }
+    }
+
+    for (let z = 1; z < res - 1; z++) {
+      for (let x = 1; x < res - 1; x++) {
+        const i = z * res + x
+        if ((srcW[i] ?? 0) > 1e-5) continue
+        let n = 0
+        let hs = 0
+        let rs = 0
+        let gs = 0
+        let bs = 0
+        for (let oz = -1; oz <= 1; oz++) {
+          for (let ox = -1; ox <= 1; ox++) {
+            if (!ox && !oz) continue
+            const j = (z + oz) * res + (x + ox)
+            if ((srcW[j] ?? 0) <= 1e-5) continue
+            n++
+            hs += this.tmpH[j] ?? 0
+            rs += this.tmpR[j] ?? 0
+            gs += this.tmpG[j] ?? 0
+            bs += this.tmpB[j] ?? 0
+          }
+        }
+        if (n >= 4) {
+          this.tmpH[i] = (hs / n) * 0.78
+          this.tmpR[i] = rs / n
+          this.tmpG[i] = gs / n
+          this.tmpB[i] = bs / n
+          this.tmpW[i] = 1
+        }
+      }
+    }
+
+    this.heights.set(this.tmpH)
+  }
+
   private sampleHeight(x: number, z: number): number {
     const res = this.res
-    const u = (x + TRAY_R) / (TRAY_R * 2) * (res - 1)
-    const v = (z + TRAY_R) / (TRAY_R * 2) * (res - 1)
+    const u = ((x + TRAY_R) / (TRAY_R * 2)) * (res - 1)
+    const v = ((z + TRAY_R) / (TRAY_R * 2)) * (res - 1)
     const x0 = Math.floor(u)
     const z0 = Math.floor(v)
     if (x0 < 0 || z0 < 0 || x0 >= res - 1 || z0 >= res - 1) return 0
@@ -422,11 +559,69 @@ export class PaintFluid {
     const mat = this.mesh.material as ReturnType<typeof createPaintMaterial> | null
     if (!mat || !('setVector3' in mat)) return
     mat.setVector3('keyDir', key)
-    mat.setColor3('keyCol', new Color3(1.05, 1.0, 0.95))
+    mat.setColor3('keyCol', new Color3(1.02, 0.97, 0.9))
     mat.setVector3('fillDir', fill)
-    mat.setColor3('fillCol', new Color3(0.55, 0.62, 0.72))
+    mat.setColor3('fillCol', new Color3(0.46, 0.58, 0.8))
     mat.setVector3('windowDir', windowDir)
-    mat.setColor3('floorCol', new Color3(0.55, 0.48, 0.38))
+    mat.setColor3('floorCol', new Color3(0.5, 0.4, 0.3))
     mat.setVector3('cameraPosition', Vector3.Zero())
+  }
+
+  getParticleCount(): number {
+    let n = 0
+    for (let i = 0; i < this.count; i++) if (this.live[i]) n++
+    return n
+  }
+
+  getPaintStats(): {
+    coverage: number
+    filled: number
+    meanRgb: [number, number, number]
+    maxHeight: number
+  } {
+    const rgba = this.rgba
+    let filled = 0
+    let r = 0
+    let g = 0
+    let b = 0
+    let maxH = 0
+    for (let i = 0; i < this.heights.length; i++) {
+      const a = rgba[i * 4 + 3] ?? 0
+      if (a < 8) continue
+      filled++
+      r += (rgba[i * 4] ?? 0) / 255
+      g += (rgba[i * 4 + 1] ?? 0) / 255
+      b += (rgba[i * 4 + 2] ?? 0) / 255
+      maxH = Math.max(maxH, this.heights[i] ?? 0)
+    }
+    const inv = filled ? 1 / filled : 0
+    return {
+      coverage: filled / Math.max(1, this.heights.length),
+      filled,
+      meanRgb: [r * inv, g * inv, b * inv],
+      maxHeight: maxH,
+    }
+  }
+
+  samplePaint(): {
+    coverage: number
+    filled: number
+    meanRgb: [number, number, number]
+    maxHeight: number
+  } {
+    return this.getPaintStats()
+  }
+
+  sampleSplat(x: number, z: number): { r: number; g: number; b: number; a: number } {
+    const res = this.res
+    const ix = Math.min(res - 1, Math.max(0, Math.round(((x + TRAY_R) / (TRAY_R * 2)) * (res - 1))))
+    const iz = Math.min(res - 1, Math.max(0, Math.round(((z + TRAY_R) / (TRAY_R * 2)) * (res - 1))))
+    const o = (iz * res + ix) * 4
+    return {
+      r: (this.rgba[o] ?? 0) / 255,
+      g: (this.rgba[o + 1] ?? 0) / 255,
+      b: (this.rgba[o + 2] ?? 0) / 255,
+      a: (this.rgba[o + 3] ?? 0) / 255,
+    }
   }
 }

@@ -227,6 +227,12 @@ body {
   pointer-events: auto;
 }
 
+.shot.on {
+  background: rgba(232, 197, 71, 0.22);
+  border-color: rgba(232, 197, 71, 0.65);
+  color: #f6e7a8;
+}
+
 .tool {
   font: inherit;
   color: var(--ink);

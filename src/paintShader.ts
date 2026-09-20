@@ -61,13 +61,13 @@ vec3 Fschlick(float u, vec3 f0) {
 
 vec3 studioEnv(vec3 dir) {
   vec3 d = normalize(dir);
-  vec3 col = mix(vec3(0.1, 0.09, 0.08), vec3(0.4, 0.38, 0.35), smoothstep(-0.1, 0.45, d.y));
-  col = mix(col, vec3(0.88, 0.86, 0.82), smoothstep(0.38, 0.96, d.y));
-  float soft = pow(max(dot(d, normalize(vec3(-0.35, 0.72, 0.48))), 0.0), 18.0);
-  col += vec3(1.12, 1.08, 1.0) * soft * 2.4;
-  float win = pow(max(dot(d, normalize(windowDir)), 0.0), 40.0);
-  col += vec3(0.95, 0.97, 1.0) * win * 1.2;
-  col += vec3(0.28, 0.18, 0.1) * pow(max(-d.y, 0.0), 1.5) * 0.32;
+  vec3 col = mix(vec3(0.16, 0.14, 0.12), vec3(0.46, 0.43, 0.39), smoothstep(-0.12, 0.42, d.y));
+  col = mix(col, vec3(0.82, 0.79, 0.74), smoothstep(0.32, 0.95, d.y));
+  float soft = pow(max(dot(d, normalize(vec3(-0.42, 0.68, 0.52))), 0.0), 10.0);
+  col += vec3(1.08, 1.02, 0.94) * soft * 1.85;
+  float win = pow(max(dot(d, normalize(windowDir)), 0.0), 28.0);
+  col += vec3(0.72, 0.84, 1.05) * win * 1.05;
+  col += vec3(0.32, 0.22, 0.14) * pow(max(-d.y, 0.0), 1.5) * 0.28;
   return col;
 }
 
@@ -83,7 +83,9 @@ float bowlY(vec2 xz) {
 float extraH(vec2 xz) {
   vec2 uv = xzToUv(xz);
   if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return 0.0;
-  return texture2D(paintMap, uv).a * heightScale;
+  float h = texture2D(paintMap, uv).a * heightScale;
+  float bead = smoothstep(0.002, 0.038, h) * (1.0 - smoothstep(0.04, 0.14, h));
+  return h + bead * 0.024;
 }
 
 float surfaceY(vec2 xz) {
@@ -91,22 +93,29 @@ float surfaceY(vec2 xz) {
 }
 
 vec3 heightNormal(vec2 xz) {
-  float e = 0.02;
+  float e = 0.032;
   float hl = surfaceY(xz + vec2(-e, 0.0));
   float hr = surfaceY(xz + vec2(e, 0.0));
   float hb = surfaceY(xz + vec2(0.0, -e));
   float ht = surfaceY(xz + vec2(0.0, e));
-  return normalize(vec3(hl - hr, 2.0 * e, hb - ht));
+  float e2 = 0.07;
+  float hl2 = surfaceY(xz + vec2(-e2, 0.0));
+  float hr2 = surfaceY(xz + vec2(e2, 0.0));
+  float hb2 = surfaceY(xz + vec2(0.0, -e2));
+  float ht2 = surfaceY(xz + vec2(0.0, e2));
+  vec3 nFine = normalize(vec3(hl - hr, 2.0 * e, hb - ht));
+  vec3 nBroad = normalize(vec3(hl2 - hr2, 2.0 * e2, hb2 - ht2));
+  return normalize(mix(nBroad, nFine, 0.55));
 }
 
 float thicknessTo(vec3 p, vec3 dir) {
   float t = 0.008;
   float inside = 0.0;
-  for (int i = 0; i < 10; i++) {
+  for (int i = 0; i < 12; i++) {
     vec3 q = p + dir * t;
     float h = extraH(q.xz);
-    if (h > 0.004 && q.y < surfaceY(q.xz)) inside += 0.014;
-    t += 0.014 + float(i) * 0.004;
+    if (h > 0.004 && q.y < surfaceY(q.xz)) inside += 0.016;
+    t += 0.012 + float(i) * 0.0035;
   }
   return inside;
 }
@@ -117,8 +126,8 @@ float contactShadow(vec3 p, vec3 L) {
   for (int i = 0; i < 10; i++) {
     vec3 q = p + L * t;
     float h = extraH(q.xz);
-    if (h > h0 + 0.012 && q.y < surfaceY(q.xz) + 0.004) {
-      return mix(0.32, 1.0, clamp(t * 2.2, 0.0, 1.0));
+    if (h > h0 + 0.01 && q.y < surfaceY(q.xz) + 0.004) {
+      return mix(0.22, 1.0, clamp(t * 2.4, 0.0, 1.0));
     }
     t += 0.02 + float(i) * 0.008;
   }
@@ -147,63 +156,79 @@ vec3 marchReflect(vec3 p, vec3 r) {
 
 void main() {
   vec4 s = texture2D(paintMap, vUv);
-  if (s.a < 0.03) discard;
+  if (s.a < 0.02) discard;
 
   vec3 pigment = clamp(s.rgb, 0.0, 1.0);
+  float luma = dot(pigment, vec3(0.299, 0.587, 0.114));
+
   float h = s.a * heightScale;
   vec3 N = heightNormal(vW.xz);
   vec3 V = normalize(vV);
   if (dot(N, V) < 0.0) N = -N;
 
-  float thick = smoothstep(0.01, 0.2, h);
-  float luma = dot(pigment, vec3(0.299, 0.587, 0.114));
-  float rough = mix(0.32, 0.04, gloss);
-  rough = clamp(rough - thick * 0.05, 0.03, 0.5);
-  vec3 f0 = vec3(0.05);
+  float thick = smoothstep(0.008, 0.2, h);
+  float wet = mix(0.4, 1.0, gloss);
+  float rough = clamp(mix(0.24, 0.03, gloss) - thick * 0.04, 0.022, 0.4);
+  float coatRough = mix(0.08, 0.02, gloss);
 
   vec3 L = normalize(-keyDir);
   vec3 H = normalize(L + V);
-  float ndl = clamp(dot(N, L), 0.0, 1.0);
-  float ndv = clamp(dot(N, V), 0.0, 1.0);
-  float ndh = clamp(dot(N, H), 0.0, 1.0);
-  float wrap = clamp(ndl * 0.3 + 0.76, 0.0, 1.25);
-  vec3 Fs = Fschlick(clamp(dot(H, V), 0.0, 1.0), f0);
+  float ndl = max(dot(N, L), 0.0);
+  float ndv = max(dot(N, V), 0.0);
+  float ndh = max(dot(N, H), 0.0);
+  float hdv = max(dot(H, V), 0.0);
+
+  vec3 f0 = vec3(0.04);
+  vec3 Fs = Fschlick(hdv, f0);
   float D = Dggx(ndh, rough);
   float G = Gsmith(ndv, ndl, rough);
   vec3 spec = D * G * Fs / max(4.0 * ndv * ndl, 1e-4);
 
-  vec3 col = pigment * wrap * keyCol;
-  col += spec * keyCol * (0.85 + 1.5 * gloss) * thick;
-
-  float fill = clamp(dot(N, normalize(-fillDir)) * 0.5 + 0.4, 0.0, 1.0);
-  col += pigment * fill * fillCol * 0.38;
-
+  float wrap = clamp(ndl * 0.38 + 0.64, 0.0, 1.15);
   float od = thicknessTo(vW + N * 0.006, L);
-  vec3 sigma = mix(vec3(1.5, 3.2, 5.8), vec3(5.2, 8.5, 13.0), 1.0 - luma);
-  sigma *= vec3(0.62, 1.0, 1.32);
-  vec3 trans = exp(-sigma * od * 3.2) * pigment;
-  col += trans * pow(wrap, 1.2) * (0.5 + 0.65 * thick);
-  col += pigment * vec3(1.1, 0.45, 0.18) * (1.0 - luma) * thick * 0.1;
+  vec3 sigma = mix(vec3(1.05, 2.2, 4.4), vec3(3.6, 6.4, 10.5), 1.0 - luma);
+  vec3 sss = exp(-sigma * od * 2.4);
+  vec3 diffuse = pigment * wrap * keyCol * (0.78 + 0.28 * thick);
+  vec3 trans = pigment * sss * keyCol * (0.48 + 0.72 * thick);
+  trans += pigment * vec3(1.2, 0.32, 0.1) * (1.0 - luma) * thick * 0.14 * wrap;
+
+  vec3 right = cross(V, vec3(0.0, 1.0, 0.0));
+  if (dot(right, right) < 1e-5) right = vec3(1.0, 0.0, 0.0);
+  else right = normalize(right);
+  vec3 Hstretch = normalize(H - right * dot(H, right) * 0.4);
+  float ndhCoat = max(dot(N, Hstretch), 0.0);
+
+  float coatF = Fschlick(ndv, vec3(0.05)).x * mix(0.5, 1.0, wet) * mix(0.55, 1.0, thick);
+  float coatD = Dggx(ndhCoat, coatRough);
+  float coatG = Gsmith(ndv, max(ndl, 0.08), coatRough);
+  vec3 coat = vec3(coatD * coatG / max(4.0 * ndv * max(ndl, 0.08), 1e-4));
+  coat *= Fschlick(hdv, vec3(0.05)) * vec3(1.06, 1.03, 0.99);
+
+  vec3 col = diffuse * (1.0 - Fs) * (1.0 - coatF);
+  col += trans * (1.0 - coatF) * 0.9;
+  col += spec * keyCol * (0.5 + 0.95 * gloss) * thick * (1.0 - coatF);
+  col += coat * keyCol * (0.35 + 1.15 * gloss) * mix(0.35, 1.0, ndl);
+
+  float fillN = clamp(dot(N, normalize(-fillDir)) * 0.5 + 0.42, 0.0, 1.0);
+  col += pigment * fillN * fillCol * 0.3 * (1.0 - coatF);
+  float winLit = clamp(dot(N, normalize(windowDir)) * 0.45 + 0.12, 0.0, 1.0);
+  col += pigment * winLit * vec3(0.55, 0.68, 0.92) * 0.2 * (1.0 - coatF);
 
   vec3 R = reflect(-V, N);
-  vec3 refl = marchReflect(vW + N * 0.01, R);
-  col += refl * Fschlick(ndv, f0) * mix(0.2, 0.82, gloss) * mix(0.4, 1.0, thick);
+  vec3 refl = marchReflect(vW + N * 0.012, R);
+  col += refl * Fschlick(ndv, f0) * mix(0.22, 0.84, gloss) * mix(0.45, 1.0, thick);
 
-  float coat = Dggx(clamp(dot(N, normalize(L + V)), 0.0, 1.0), 0.03);
-  coat *= Fschlick(ndv, vec3(0.08)).x;
-  col += coat * vec3(1.16, 1.12, 1.06) * (0.5 + 1.6 * gloss) * thick;
+  float meniscus = smoothstep(0.006, 0.04, h) * (1.0 - smoothstep(0.045, 0.13, h));
+  col += vec3(0.96, 0.94, 0.9) * coatF * meniscus * (0.1 + 0.26 * gloss);
 
-  col *= mix(1.0, contactShadow(vW + N * 0.008, L), 0.45);
-  float side = pow(clamp(1.0 - abs(N.y), 0.0, 1.0), 1.2);
-  col = max(col, pigment * mix(0.74, 0.94, luma));
-  col += pigment * side * 0.28;
-  col += studioEnv(N) * pigment * 0.08;
-  col += floorCol * pigment * pow(max(-N.y, 0.0), 1.4) * 0.1;
+  col *= mix(1.0, contactShadow(vW + N * 0.008, L), 0.55);
+  float side = pow(clamp(1.0 - abs(N.y), 0.0, 1.0), 1.15);
+  col += pigment * side * 0.14;
+  col += studioEnv(N) * pigment * 0.09;
+  col += floorCol * pigment * pow(max(-N.y, 0.0), 1.6) * 0.06;
 
-  col = col / (col + vec3(1.0));
-  col = pow(max(col, 0.0), vec3(0.96));
-  col += (hash(gl_FragCoord.xy) - 0.5) * 0.01;
-  gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
+  col += (hash(gl_FragCoord.xy) - 0.5) * 0.003;
+  gl_FragColor = vec4(max(col, 0.0), 1.0);
 }
 `
 
@@ -239,7 +264,7 @@ export function createPaintMaterial(scene: Scene, _software = false): ShaderMate
       samplers: ['paintMap'],
     },
   )
-  mat.backFaceCulling = true
+  mat.backFaceCulling = false
   mat.onError = (_effect, errors) => {
     const el = document.querySelector('#hint')
     if (el) {
