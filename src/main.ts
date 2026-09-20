@@ -3,6 +3,8 @@ import { PaintEngine } from './engine'
 import { TUBES, feelFromViscosity, hexToRgb, viscosityName } from './paints'
 import type { Tube } from './paints'
 
+type Tool = 'glop' | 'finger' | 'knife' | 'stick'
+
 function must<T>(el: T | null, name: string): T {
   if (!el) throw new Error(`Missing ${name}`)
   return el
@@ -14,10 +16,16 @@ const hint = must(document.querySelector<HTMLParagraphElement>('#hint'), 'hint')
 const swatchesEl = must(document.querySelector<HTMLDivElement>('#swatches'), 'swatches')
 const viscosityEl = must(document.querySelector<HTMLInputElement>('#viscosity'), 'viscosity')
 const viscLabel = must(document.querySelector<HTMLElement>('#visc-label'), 'visc-label')
-const fingerBtn = must(document.querySelector<HTMLButtonElement>('#finger'), 'finger')
-const pourBtn = must(document.querySelector<HTMLButtonElement>('#pour'), 'pour')
+const sizeEl = must(document.querySelector<HTMLInputElement>('#size'), 'size')
+const sizeLabel = must(document.querySelector<HTMLElement>('#size-label'), 'size-label')
 const scrapeBtn = must(document.querySelector<HTMLButtonElement>('#scrape'), 'scrape')
 const soundBtn = must(document.querySelector<HTMLButtonElement>('#sound'), 'sound')
+const toolButtons = {
+  glop: must(document.querySelector<HTMLButtonElement>('#tool-glop'), 'glop'),
+  finger: must(document.querySelector<HTMLButtonElement>('#tool-finger'), 'finger'),
+  knife: must(document.querySelector<HTMLButtonElement>('#tool-knife'), 'knife'),
+  stick: must(document.querySelector<HTMLButtonElement>('#tool-stick'), 'stick'),
+}
 
 let engine: PaintEngine
 try {
@@ -36,7 +44,8 @@ const audio = new MixAudio()
 let viscosity = 0.72
 let feel = feelFromViscosity(viscosity)
 let selected: Tube = TUBES[0] ?? { name: 'Cadmium Red', hex: '#d42a1e' }
-let loadedFinger = true
+let tool: Tool = 'glop'
+let size = 0.52
 let customHex = '#7a3cff'
 
 type Stroke = {
@@ -44,11 +53,26 @@ type Stroke = {
   prev: [number, number] | null
   moved: number
   started: number
+  lastGlop: number
 }
 
 const strokes = new Map<number, Stroke>()
 let light: [number, number] = [0.42, 0.68]
 let lastFrame = performance.now()
+
+function sizeName(t: number): string {
+  if (t < 0.34) return 'Dab'
+  if (t < 0.62) return 'Medium'
+  if (t < 0.82) return 'Glop'
+  return 'Dump'
+}
+
+function toolRadius(): number {
+  if (tool === 'stick') return feel.fingerRadius * 0.45 * (0.55 + size)
+  if (tool === 'knife') return feel.fingerRadius * 1.55 * (0.6 + size * 0.7)
+  if (tool === 'glop') return feel.dyeRadius * (0.55 + size * 1.35)
+  return feel.fingerRadius * (0.7 + size * 0.7)
+}
 
 function toUv(event: PointerEvent): [number, number] {
   const rect = canvas.getBoundingClientRect()
@@ -57,48 +81,32 @@ function toUv(event: PointerEvent): [number, number] {
   return [x, y]
 }
 
-function dropBlob(
-  uv: [number, number],
-  color = hexToRgb(selected.hex),
-  scale = 1,
-  announce = true,
-): void {
-  const radius = feel.dyeRadius * (0.85 + Math.random() * 0.55) * scale
-  engine.splatPaint(uv, color, radius, 1.7)
-  const offset: [number, number] = [
-    uv[0] + (Math.random() - 0.5) * radius * 0.35,
-    uv[1] + (Math.random() - 0.5) * radius * 0.35,
-  ]
-  engine.splatPaint(offset, color, radius * 0.55, 0.55)
-  engine.nudgeRadial(uv, [(Math.random() - 0.5) * 0.08, (Math.random() - 0.5) * 0.06], radius * 0.8, 0.12, 0.4)
-  if (announce) {
-    audio.blob()
-    if (navigator.vibrate) navigator.vibrate(10)
-  }
+function glopAt(uv: [number, number], strength: number): void {
+  const radius = toolRadius()
+  const color = hexToRgb(selected.hex)
+  engine.splatPaint(uv, color, radius, strength)
+  engine.nudgeRadial(uv, [(Math.random() - 0.5) * 0.04, -0.02], radius * 0.7, 0.08, 0.18)
 }
 
-function smear(
-  origin: [number, number],
-  color: [number, number, number],
-  dir: [number, number],
-  steps: number,
-  scale: number,
-): void {
-  for (let i = 0; i < steps; i++) {
-    const t = i / Math.max(steps - 1, 1)
-    const uv: [number, number] = [origin[0] + dir[0] * t, origin[1] + dir[1] * t]
-    dropBlob(uv, color, scale * (0.75 + (1 - t) * 0.35), false)
-  }
+function mixAt(uv: [number, number], delta: [number, number], steps: number): void {
+  const radius = toolRadius()
+  const depthScale = tool === 'knife' ? 0.55 : tool === 'stick' ? 0.22 : 0.38
+  const pushScale = tool === 'knife' ? 0.35 : tool === 'stick' ? 1.35 : 0.95
+  const dragScale = tool === 'knife' ? 1.45 : 1
+  const depth = (feel.fingerDepth * depthScale) / steps
+  const push = (feel.fingerPush * pushScale) / steps
+  const drag = feel.splatForce * dragScale
+  engine.displaceHeight(uv, radius, depth)
+  engine.nudgeRadial(uv, delta, radius, push, drag)
 }
 
-function pour(): void {
-  smear([0.18, 0.62], hexToRgb('#d42a1e'), [0.22, 0.08], 5, 1.15)
-  smear([0.55, 0.7], hexToRgb('#2a4bd7'), [0.18, -0.12], 5, 1.05)
-  smear([0.22, 0.38], hexToRgb('#e8c547'), [0.28, 0.04], 4, 1.2)
-  smear([0.48, 0.32], hexToRgb('#0b6e56'), [0.16, 0.14], 4, 0.95)
-  dropBlob([0.4, 0.52], hexToRgb('#f3eee4'), 1.35, false)
-  dropBlob([0.62, 0.46], hexToRgb('#c2185b'), 1.1, false)
-  dropBlob([0.33, 0.64], hexToRgb('#a3542d'), 0.95, false)
+function setTool(next: Tool): void {
+  tool = next
+  for (const [name, btn] of Object.entries(toolButtons)) {
+    const on = name === next
+    btn.classList.toggle('on', on)
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false')
+  }
 }
 
 function renderSwatches(): void {
@@ -157,12 +165,20 @@ canvas.addEventListener('pointerdown', (event) => {
   canvas.setPointerCapture(event.pointerId)
   const uv = toUv(event)
   light = uv
-  strokes.set(event.pointerId, { id: event.pointerId, prev: uv, moved: 0, started: performance.now() })
+  strokes.set(event.pointerId, {
+    id: event.pointerId,
+    prev: uv,
+    moved: 0,
+    started: performance.now(),
+    lastGlop: 0,
+  })
   canvas.style.cursor = 'none'
-  engine.displaceHeight(uv, feel.fingerRadius, feel.fingerDepth * 0.28)
-  engine.nudgeRadial(uv, [0, 0], feel.fingerRadius, feel.fingerPush * 0.35, 0)
-  if (loadedFinger) {
-    engine.splatPaint(uv, hexToRgb(selected.hex), feel.dyeRadius * 0.45, 0.38)
+  if (tool === 'glop') {
+    glopAt(uv, 1.15 + size * 0.9)
+    audio.blob()
+    if (navigator.vibrate) navigator.vibrate(8)
+  } else {
+    mixAt(uv, [0, 0], 1)
   }
   hideHint()
 })
@@ -179,56 +195,37 @@ canvas.addEventListener('pointermove', (event) => {
     const dy = uv[1] - stroke.prev[1]
     const dist = Math.hypot(dx, dy)
     stroke.moved += dist
-    const steps = Math.max(1, Math.ceil(dist / (feel.fingerRadius * 0.22)))
-    const depth = (feel.fingerDepth * 0.38) / steps
-    const push = (feel.fingerPush * 0.95) / steps
-    const drag = feel.splatForce
-    const color = hexToRgb(selected.hex)
+    const radius = toolRadius()
+    const steps = Math.max(1, Math.ceil(dist / (radius * 0.22)))
     for (let i = 1; i <= steps; i++) {
       const t = i / steps
       const p: [number, number] = [stroke.prev[0] + dx * t, stroke.prev[1] + dy * t]
-      engine.displaceHeight(p, feel.fingerRadius, depth)
-      engine.nudgeRadial(p, [dx, dy], feel.fingerRadius, push, drag)
-      if (loadedFinger) {
-        engine.splatPaint(p, color, feel.dyeRadius * 0.32, 0.16 / steps)
-      }
+      if (tool === 'glop') glopAt(p, (0.55 + size * 0.5) / steps)
+      else mixAt(p, [dx, dy], steps)
     }
-    audio.stir(dist * 22)
+    audio.stir(dist * (tool === 'glop' ? 10 : 22))
   }
   stroke.prev = uv
 })
 
 function endStroke(event: PointerEvent): void {
-  const stroke = strokes.get(event.pointerId)
   strokes.delete(event.pointerId)
   if (strokes.size === 0) canvas.style.cursor = 'crosshair'
-  if (!stroke) return
-  const elapsed = performance.now() - stroke.started
-  if (stroke.moved < 0.018 && elapsed < 280) {
-    dropBlob(toUv(event))
-  }
 }
 
 canvas.addEventListener('pointerup', endStroke)
 canvas.addEventListener('pointercancel', endStroke)
 canvas.addEventListener('contextmenu', (event) => event.preventDefault())
 
-fingerBtn.addEventListener('click', () => {
-  loadedFinger = !loadedFinger
-  fingerBtn.classList.toggle('on', loadedFinger)
-  fingerBtn.setAttribute('aria-pressed', loadedFinger ? 'true' : 'false')
-  fingerBtn.textContent = loadedFinger ? 'Finger: loaded' : 'Finger: clean'
-})
-
-pourBtn.addEventListener('click', () => {
-  pour()
-  hideHint()
-})
+for (const name of Object.keys(toolButtons) as Tool[]) {
+  toolButtons[name].addEventListener('click', () => setTool(name))
+}
 
 scrapeBtn.addEventListener('click', () => {
   engine.scrape()
-  hint.textContent = 'Canvas scraped. Pour, or tap to blob.'
+  hint.textContent = 'Tray scraped. Pick a color and glop.'
   hint.classList.remove('gone')
+  setTool('glop')
 })
 
 soundBtn.addEventListener('click', async () => {
@@ -240,6 +237,11 @@ soundBtn.addEventListener('click', async () => {
 
 viscosityEl.addEventListener('input', () => {
   applyViscosity(Number(viscosityEl.value) / 100)
+})
+
+sizeEl.addEventListener('input', () => {
+  size = Number(sizeEl.value) / 100
+  sizeLabel.textContent = sizeName(size)
 })
 
 window.addEventListener(
@@ -255,9 +257,20 @@ window.addEventListener('resize', () => engine.resize())
 function frame(now: number): void {
   const dt = Math.min(0.033, (now - lastFrame) / 1000)
   lastFrame = now
+  if (tool === 'glop') {
+    for (const stroke of strokes.values()) {
+      if (!stroke.prev) continue
+      if (now - stroke.lastGlop > 48) {
+        glopAt(stroke.prev, 0.28 + size * 0.45)
+        stroke.lastGlop = now
+      }
+    }
+  }
   const fingers: { uv: [number, number]; radius: number }[] = []
-  for (const stroke of strokes.values()) {
-    if (stroke.prev) fingers.push({ uv: stroke.prev, radius: feel.fingerRadius })
+  if (tool === 'finger') {
+    for (const stroke of strokes.values()) {
+      if (stroke.prev) fingers.push({ uv: stroke.prev, radius: toolRadius() })
+    }
   }
   engine.setFingers(fingers, hexToRgb(selected.hex))
   engine.step(dt)
@@ -267,8 +280,9 @@ function frame(now: number): void {
 
 renderSwatches()
 applyViscosity(Number(viscosityEl.value) / 100)
+size = Number(sizeEl.value) / 100
+sizeLabel.textContent = sizeName(size)
 engine.resize()
-pour()
 requestAnimationFrame(frame)
 
 const fontLink = document.createElement('link')

@@ -13,7 +13,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta
       name="description"
-      content="Stir thick, glossy paint with your finger. A satisfying mixer, not a painting tool."
+      content="Glop wet paint onto a blank tray and mix it with a finger, knife, or stick."
     />
     <title>Impasto — wet paint mixer</title>
     <link rel="stylesheet" href="/src/style.css" />
@@ -25,17 +25,32 @@
       <p>This mixer needs WebGL2, which this browser does not provide. Try a current mobile Safari, Chrome, or Firefox.</p>
     </div>
 
-    <p id="hint" class="hint">Press in and drag. Paint piles, parts, and stays wet.</p>
+    <p id="hint" class="hint">Pick a color. Press to glop. Switch tools to mix.</p>
 
     <aside class="tray" aria-label="Paint controls">
       <header class="brand">
         <div>
           <h1>Impasto</h1>
-          <p>Wet oil on a tray. Drag a finger through it.</p>
+          <p>Blank tray. Glop color, then mash it.</p>
         </div>
       </header>
 
       <div class="swatches" role="listbox" aria-label="Paint colors" id="swatches"></div>
+
+      <div class="tools" role="toolbar" aria-label="Mixing tools">
+        <button id="tool-glop" class="tool on" type="button" aria-pressed="true">Glop</button>
+        <button id="tool-finger" class="tool" type="button" aria-pressed="false">Finger</button>
+        <button id="tool-knife" class="tool" type="button" aria-pressed="false">Knife</button>
+        <button id="tool-stick" class="tool" type="button" aria-pressed="false">Stick</button>
+      </div>
+
+      <label class="slider">
+        <span class="slider-meta">
+          <span>Size</span>
+          <strong id="size-label">Medium</strong>
+        </span>
+        <input id="size" type="range" min="18" max="100" value="52" />
+      </label>
 
       <label class="slider">
         <span class="slider-meta">
@@ -52,10 +67,6 @@
       </label>
 
       <div class="actions">
-        <button id="finger" class="toggle on" type="button" aria-pressed="true">
-          Finger: loaded
-        </button>
-        <button id="pour" type="button">Pour</button>
         <button id="scrape" type="button">Scrape</button>
         <button id="sound" class="toggle" type="button" aria-pressed="false">Sound</button>
       </div>

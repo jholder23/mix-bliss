@@ -194,9 +194,32 @@ body {
   font-size: 0.68rem;
 }
 
+.tools {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.35rem;
+}
+
+.tool {
+  font: inherit;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--line);
+  border-radius: 0.85rem;
+  padding: 0.5rem 0.3rem;
+  min-height: 2.35rem;
+  cursor: pointer;
+}
+
+.tool.on {
+  background: rgba(232, 197, 71, 0.2);
+  border-color: rgba(232, 197, 71, 0.6);
+  color: #f6e7a8;
+}
+
 .actions {
   display: grid;
-  grid-template-columns: 1.4fr 0.8fr 0.8fr 0.8fr;
+  grid-template-columns: 1fr 1fr;
   gap: 0.4rem;
 }
 
