@@ -66,11 +66,11 @@ const HONEY: PaintFeel = {
   dyeRadius: 0.072,
   gloss: 0.92,
   pressureIters: 20,
-  heightLevel: 0.028,
-  slope: 0.012,
-  fingerDepth: 0.62,
-  fingerRadius: 0.056,
-  fingerPush: 1.15,
+  heightLevel: 0.012,
+  slope: 0.008,
+  fingerDepth: 0.95,
+  fingerRadius: 0.062,
+  fingerPush: 1.45,
 }
 
 const TAR: PaintFeel = {

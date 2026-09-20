@@ -298,8 +298,8 @@ export class PaintEngine {
     this.deleteDouble(this.pressure)
     const coarse =
       this.software || window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 720
-    const sim = getResolution(this.canvas.width, this.canvas.height, this.software ? 96 : coarse ? 192 : 320)
-    const dye = getResolution(this.canvas.width, this.canvas.height, this.software ? 192 : coarse ? 448 : 720)
+    const sim = getResolution(this.canvas.width, this.canvas.height, this.software ? 128 : coarse ? 192 : 320)
+    const dye = getResolution(this.canvas.width, this.canvas.height, this.software ? 280 : coarse ? 448 : 768)
     const velFilter = this.fmt.filter
     this.velocity = createDouble(gl, sim.w, sim.h, this.fmt, velFilter)
     this.dye = createDouble(gl, dye.w, dye.h, this.fmt, this.fmt.filter)

@@ -57,7 +57,12 @@ function toUv(event: PointerEvent): [number, number] {
   return [x, y]
 }
 
-function dropBlob(uv: [number, number], color = hexToRgb(selected.hex), scale = 1): void {
+function dropBlob(
+  uv: [number, number],
+  color = hexToRgb(selected.hex),
+  scale = 1,
+  announce = true,
+): void {
   const radius = feel.dyeRadius * (0.85 + Math.random() * 0.55) * scale
   engine.splatPaint(uv, color, radius, 1.7)
   const offset: [number, number] = [
@@ -66,17 +71,34 @@ function dropBlob(uv: [number, number], color = hexToRgb(selected.hex), scale = 
   ]
   engine.splatPaint(offset, color, radius * 0.55, 0.55)
   engine.nudgeRadial(uv, [(Math.random() - 0.5) * 0.08, (Math.random() - 0.5) * 0.06], radius * 0.8, 0.12, 0.4)
-  audio.blob()
-  if (navigator.vibrate) navigator.vibrate(10)
+  if (announce) {
+    audio.blob()
+    if (navigator.vibrate) navigator.vibrate(10)
+  }
+}
+
+function smear(
+  origin: [number, number],
+  color: [number, number, number],
+  dir: [number, number],
+  steps: number,
+  scale: number,
+): void {
+  for (let i = 0; i < steps; i++) {
+    const t = i / Math.max(steps - 1, 1)
+    const uv: [number, number] = [origin[0] + dir[0] * t, origin[1] + dir[1] * t]
+    dropBlob(uv, color, scale * (0.75 + (1 - t) * 0.35), false)
+  }
 }
 
 function pour(): void {
-  const count = 5 + Math.floor(Math.random() * 3)
-  for (let i = 0; i < count; i++) {
-    const tube = TUBES[Math.floor(Math.random() * TUBES.length)] ?? { name: 'Cadmium Red', hex: '#d42a1e' }
-    const uv: [number, number] = [0.28 + Math.random() * 0.44, 0.34 + Math.random() * 0.36]
-    dropBlob(uv, hexToRgb(tube.hex), 1.05 + Math.random() * 1.15)
-  }
+  smear([0.18, 0.62], hexToRgb('#d42a1e'), [0.22, 0.08], 5, 1.15)
+  smear([0.55, 0.7], hexToRgb('#2a4bd7'), [0.18, -0.12], 5, 1.05)
+  smear([0.22, 0.38], hexToRgb('#e8c547'), [0.28, 0.04], 4, 1.2)
+  smear([0.48, 0.32], hexToRgb('#0b6e56'), [0.16, 0.14], 4, 0.95)
+  dropBlob([0.4, 0.52], hexToRgb('#f3eee4'), 1.35, false)
+  dropBlob([0.62, 0.46], hexToRgb('#c2185b'), 1.1, false)
+  dropBlob([0.33, 0.64], hexToRgb('#a3542d'), 0.95, false)
 }
 
 function renderSwatches(): void {
@@ -136,7 +158,8 @@ canvas.addEventListener('pointerdown', (event) => {
   const uv = toUv(event)
   light = uv
   strokes.set(event.pointerId, { id: event.pointerId, prev: uv, moved: 0, started: performance.now() })
-  engine.displaceHeight(uv, feel.fingerRadius, feel.fingerDepth * 0.18)
+  canvas.style.cursor = 'none'
+  engine.displaceHeight(uv, feel.fingerRadius, feel.fingerDepth * 0.28)
   engine.nudgeRadial(uv, [0, 0], feel.fingerRadius, feel.fingerPush * 0.35, 0)
   if (loadedFinger) {
     engine.splatPaint(uv, hexToRgb(selected.hex), feel.dyeRadius * 0.45, 0.38)
@@ -157,8 +180,8 @@ canvas.addEventListener('pointermove', (event) => {
     const dist = Math.hypot(dx, dy)
     stroke.moved += dist
     const steps = Math.max(1, Math.ceil(dist / (feel.fingerRadius * 0.22)))
-    const depth = (feel.fingerDepth * 0.2) / steps
-    const push = (feel.fingerPush * 0.7) / steps
+    const depth = (feel.fingerDepth * 0.38) / steps
+    const push = (feel.fingerPush * 0.95) / steps
     const drag = feel.splatForce
     const color = hexToRgb(selected.hex)
     for (let i = 1; i <= steps; i++) {
@@ -178,6 +201,7 @@ canvas.addEventListener('pointermove', (event) => {
 function endStroke(event: PointerEvent): void {
   const stroke = strokes.get(event.pointerId)
   strokes.delete(event.pointerId)
+  if (strokes.size === 0) canvas.style.cursor = 'crosshair'
   if (!stroke) return
   const elapsed = performance.now() - stroke.started
   if (stroke.moved < 0.018 && elapsed < 280) {

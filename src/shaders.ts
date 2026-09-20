@@ -76,8 +76,7 @@ void main() {
   p.x *= uAspect;
   float r = max(uRadius, 1e-5);
   float t = clamp(1.0 - length(p) / r, 0.0, 1.0);
-  float dome = t * t * (3.0 - 2.0 * t);
-  dome *= mix(0.55, 1.0, t);
+  float dome = pow(t, 1.55);
   float add = dome * uStrength;
   vec4 base = texture(uTarget, vUv);
   float newA = min(base.a + add, 3.2);
@@ -102,12 +101,12 @@ void main() {
   p.x *= uAspect;
   float d = length(p);
   float r = max(uRadius, 1e-5);
-  float groove = exp(-d * d / (r * r * 0.34));
-  float rim = exp(-pow(d - r * 0.92, 2.0) / (r * r * 0.085));
+  float groove = exp(-d * d / (r * r * 0.28));
+  float rim = exp(-pow(d - r * 0.78, 2.0) / (r * r * 0.055));
   vec4 base = texture(uTarget, vUv);
   float h = base.a;
   h = max(0.0, h - groove * uDepth);
-  h = min(3.2, h + rim * uDepth * 0.72);
+  h = min(3.2, h + rim * uDepth * 1.05);
   fragColor = vec4(base.rgb, h);
 }
 `
@@ -378,13 +377,16 @@ vec3 studioEnv(vec3 dir) {
 }
 
 vec3 shadeFinger(vec3 n, vec3 v, vec3 l, vec3 wetTint, float wet) {
-  vec3 skin = vec3(0.78, 0.52, 0.40);
+  vec3 skin = vec3(0.86, 0.62, 0.48);
   vec3 H = normalize(l + v);
-  float wrap = clamp(dot(n, l) * 0.55 + 0.45, 0.0, 1.0);
-  vec3 col = skin * wrap;
-  col += skin * vec3(1.05, 0.28, 0.12) * pow(1.0 - clamp(dot(n, v), 0.0, 1.0), 2.2) * 0.35;
-  col += pow(clamp(dot(n, H), 0.0, 1.0), 90.0) * vec3(1.0, 0.93, 0.88) * mix(0.12, 0.55, wet);
-  col = mix(col, mix(col, wetTint, 0.72) * 0.85, wet * 0.85);
+  float wrap = clamp(dot(n, l) * 0.5 + 0.5, 0.0, 1.0);
+  vec3 col = skin * (0.22 + 0.85 * wrap);
+  col += vec3(0.55, 0.16, 0.08) * pow(1.0 - clamp(dot(n, v), 0.0, 1.0), 1.8) * 0.45;
+  col += pow(clamp(dot(n, H), 0.0, 1.0), 64.0) * vec3(1.0, 0.94, 0.88) * mix(0.18, 0.85, wet);
+  float nail = smoothstep(0.22, 0.72, n.z) * smoothstep(0.15, -0.05, n.y);
+  col = mix(col, vec3(0.93, 0.82, 0.78), nail * 0.55);
+  col += nail * pow(clamp(dot(n, H), 0.0, 1.0), 120.0) * 0.35;
+  col = mix(col, mix(col * 0.7, wetTint, 0.8), wet * 0.9);
   return col;
 }
 
@@ -395,7 +397,7 @@ float fingerHit(vec4 finger, vec2 uv, out vec3 n, out float wet) {
     return 0.0;
   }
   vec2 center = finger.xy;
-  float radius = finger.z;
+  float radius = finger.z * 1.45;
   vec2 p = uv - center;
   p.x *= uAspect;
   float d = length(p);
@@ -406,7 +408,7 @@ float fingerHit(vec4 finger, vec2 uv, out vec3 n, out float wet) {
   }
   float z = sqrt(max(radius * radius - d * d, 0.0));
   n = normalize(vec3(p.x, p.y, z));
-  wet = smoothstep(0.18 * radius, 0.0, z) * 0.9 + 0.1;
+  wet = smoothstep(radius * 0.45, 0.0, z);
   return 1.0;
 }
 
@@ -426,29 +428,29 @@ void main() {
 
   float dx = (tr + 2.0 * r + br) - (tl + 2.0 * l + bl);
   float dy = (bl + 2.0 * b + br) - (tl + 2.0 * t + tr);
-  float relief = 5.8 + h * 3.4;
-  vec3 N = normalize(vec3(-dx * relief, -dy * relief, 1.15));
+  float relief = 11.5 + h * 5.5;
+  vec3 N = normalize(vec3(-dx * relief, -dy * relief, 0.82));
 
   float grain = (fbm(vUv * vec2(uAspect, 1.0) * 90.0 + 8.0) - 0.5);
   float peel = (fbm(vUv * vec2(uAspect, 1.0) * 220.0) - 0.5);
-  N = normalize(N + vec3(grain * 0.18, peel * 0.16, 0.0) * smoothstep(0.05, 0.45, h));
+  N = normalize(N + vec3(grain * 0.42, peel * 0.38, 0.0) * smoothstep(0.04, 0.4, h));
 
   vec3 V = vec3(0.0, 0.0, 1.0);
   vec3 key = normalize(vec3(-0.32 + sin(uTime * 0.17) * 0.05, 0.58, 0.74));
   vec3 fill = normalize(vec3(0.62, -0.12, 0.55));
   vec3 fingerL = normalize(vec3(uLight - vUv, 0.62));
 
-  float cover = smoothstep(0.0, 0.11, h);
-  float thick = smoothstep(0.12, 1.6, h);
-  float cavity = clamp(1.0 - ((l + r + b + t) * 0.25 - h) * 2.8, 0.42, 1.0);
+  float cover = smoothstep(0.0, 0.045, h);
+  float thick = smoothstep(0.08, 1.35, h);
+  float cavity = clamp(1.0 - ((l + r + b + t) * 0.25 - h) * 4.4, 0.28, 1.0);
 
   vec3 pigment = mix(dye.rgb, pow(max(dye.rgb, vec3(0.0)), vec3(1.28)), 0.4);
   pigment *= mix(1.0, 0.78, thick * 0.35);
 
-  float rough = mix(0.38, 0.07, uGloss);
-  rough = mix(rough, 0.22, peel * 0.5 + 0.5);
-  rough = mix(0.55, rough, cover);
-  rough = clamp(rough - thick * 0.04, 0.045, 0.7);
+  float rough = mix(0.32, 0.045, uGloss);
+  rough = mix(rough, 0.16, peel * 0.5 + 0.5);
+  rough = mix(0.48, rough, cover);
+  rough = clamp(rough - thick * 0.06, 0.03, 0.62);
 
   vec3 F0 = mix(vec3(0.04), mix(vec3(0.06), pigment * 0.18, 0.25), cover);
 
@@ -459,9 +461,9 @@ void main() {
   lights[1] = fill;
   lights[2] = fingerL;
   float intens[3];
-  intens[0] = 1.55;
-  intens[1] = 0.38;
-  intens[2] = 0.55;
+  intens[0] = 2.05;
+  intens[1] = 0.28;
+  intens[2] = 0.72;
 
   for (int i = 0; i < 3; i++) {
     vec3 L = lights[i];
@@ -484,13 +486,13 @@ void main() {
   vec3 env = studioEnv(R);
   float NdotV = clamp(dot(N, V), 0.0, 1.0);
   vec3 Fr = F_Schlick(NdotV, F0);
-  color += env * Fr * mix(0.18, 0.85, uGloss) * mix(0.15, 1.0, cover);
+  color += env * Fr * mix(0.22, 1.15, uGloss) * mix(0.12, 1.0, cover);
 
-  float coatRough = 0.045;
+  float coatRough = 0.028;
   vec3 Hc = normalize(key + V);
   float coat = D_GGX(clamp(dot(N, Hc), 0.0, 1.0), coatRough);
-  coat *= F_Schlick(NdotV, vec3(0.08)).x;
-  color += coat * vec3(1.2, 1.14, 1.05) * (0.25 + 1.15 * uGloss) * thick;
+  coat *= F_Schlick(NdotV, vec3(0.1)).x;
+  color += coat * vec3(1.35, 1.26, 1.12) * (0.4 + 1.6 * uGloss) * thick;
 
   vec2 flow = texture(uVelocity, vUv).xy;
   float flowLen = length(flow);
@@ -523,8 +525,8 @@ void main() {
   if (hit > 0.5) {
     vec3 fcol = shadeFinger(fn, V, key, mix(uFingerTint, dye.rgb, cover * 0.6), wet);
     float edge = pow(clamp(fn.z, 0.0, 1.0), 0.35);
-    painted = mix(painted * 0.28, fcol, edge);
-    painted += pow(clamp(fn.z, 0.0, 1.0), 22.0) * vec3(1.0, 0.95, 0.9) * 0.16;
+    painted = mix(painted * 0.18, fcol, edge);
+    painted += pow(clamp(fn.z, 0.0, 1.0), 16.0) * vec3(1.0, 0.95, 0.9) * 0.28;
   } else {
     float shadow = 0.0;
     if (uFinger0.w > 0.5) {
