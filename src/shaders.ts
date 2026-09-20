@@ -377,17 +377,16 @@ vec3 studioEnv(vec3 dir) {
 }
 
 vec3 shadeFinger(vec3 n, vec3 v, vec3 l, vec3 wetTint, float wet) {
-  vec3 skin = vec3(0.86, 0.62, 0.48);
+  vec3 skin = vec3(0.72, 0.48, 0.36);
   vec3 H = normalize(l + v);
-  float wrap = clamp(dot(n, l) * 0.5 + 0.5, 0.0, 1.0);
-  vec3 col = skin * (0.22 + 0.85 * wrap);
-  col += vec3(0.55, 0.16, 0.08) * pow(1.0 - clamp(dot(n, v), 0.0, 1.0), 1.8) * 0.45;
-  col += pow(clamp(dot(n, H), 0.0, 1.0), 64.0) * vec3(1.0, 0.94, 0.88) * mix(0.18, 0.85, wet);
-  float nail = smoothstep(0.22, 0.72, n.z) * smoothstep(0.15, -0.05, n.y);
-  col = mix(col, vec3(0.93, 0.82, 0.78), nail * 0.55);
-  col += nail * pow(clamp(dot(n, H), 0.0, 1.0), 120.0) * 0.35;
-  col = mix(col, mix(col * 0.7, wetTint, 0.8), wet * 0.9);
-  return col;
+  float wrap = clamp(dot(n, l) * 0.45 + 0.4, 0.0, 1.0);
+  vec3 col = skin * wrap * 0.95;
+  col += vec3(0.42, 0.12, 0.06) * pow(1.0 - clamp(dot(n, v), 0.0, 1.0), 1.6) * 0.35;
+  col += pow(clamp(dot(n, H), 0.0, 1.0), 48.0) * vec3(0.95, 0.82, 0.72) * 0.12;
+  float nail = smoothstep(0.35, 0.82, n.z) * smoothstep(0.12, -0.08, n.y);
+  col = mix(col, vec3(0.78, 0.62, 0.56), nail * 0.4);
+  col = mix(col, mix(skin * 0.55, wetTint, 0.55), wet * 0.65);
+  return col * 0.82;
 }
 
 float fingerHit(vec4 finger, vec2 uv, out vec3 n, out float wet) {
@@ -397,7 +396,7 @@ float fingerHit(vec4 finger, vec2 uv, out vec3 n, out float wet) {
     return 0.0;
   }
   vec2 center = finger.xy;
-  float radius = finger.z * 1.45;
+  float radius = finger.z * 1.08;
   vec2 p = uv - center;
   p.x *= uAspect;
   float d = length(p);
@@ -408,7 +407,12 @@ float fingerHit(vec4 finger, vec2 uv, out vec3 n, out float wet) {
   }
   float z = sqrt(max(radius * radius - d * d, 0.0));
   n = normalize(vec3(p.x, p.y, z));
-  wet = smoothstep(radius * 0.45, 0.0, z);
+  wet = smoothstep(0.55, 0.05, n.z);
+  if (n.z < 0.12) {
+    n = vec3(0.0);
+    wet = 0.0;
+    return 0.0;
+  }
   return 1.0;
 }
 
