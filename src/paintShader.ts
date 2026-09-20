@@ -240,6 +240,20 @@ export function createPaintMaterial(scene: Scene, _software = false): ShaderMate
     },
   )
   mat.backFaceCulling = true
-  mat.needAlphaTesting = () => true
+  mat.onError = (_effect, errors) => {
+    const el = document.querySelector('#hint')
+    if (el) {
+      el.textContent = errors.slice(0, 280)
+      el.classList.remove('gone')
+    }
+    const fail = document.querySelector('#fail')
+    if (fail instanceof HTMLElement) {
+      fail.hidden = false
+      fail.replaceChildren()
+      const p = document.createElement('p')
+      p.textContent = errors
+      fail.append(p)
+    }
+  }
   return mat
 }

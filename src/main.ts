@@ -47,8 +47,17 @@ const { engine, scene, camera, software, lookTo, setToolGhost, setLeftOrbit } = 
 const audio = new MixAudio()
 let viscosity = 0.72
 let feel = simFromViscosity(viscosity)
-const fluid = new PaintFluid(scene, feel, software)
-fluid.setLights(new Vector3(-0.35, -1.15, -0.28), new Vector3(0.2, -1, 0.35), new Vector3(0.55, 0.35, -0.45))
+let fluid: PaintFluid
+try {
+  fluid = new PaintFluid(scene, feel, software)
+  fluid.setLights(new Vector3(-0.35, -1.15, -0.28), new Vector3(0.2, -1, 0.35), new Vector3(0.55, 0.35, -0.45))
+} catch (err) {
+  fail.hidden = false
+  const p = document.createElement('p')
+  p.textContent = err instanceof Error ? err.message : 'Paint engine failed'
+  fail.replaceChildren(p)
+  throw err
+}
 
 let selected: Tube = TUBES[0] ?? { name: 'Cadmium Red', hex: '#d42a1e' }
 let tool: Tool = 'glop'
