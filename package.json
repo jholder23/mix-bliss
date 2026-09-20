@@ -1,22 +1,17 @@
 {
   "name": "impasto",
   "private": true,
-  "version": "1.0.0",
+  "version": "2.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "test": "npm run test:unit && playwright test",
-    "test:e2e": "playwright test",
+    "test": "npm run test:unit",
     "test:unit": "npx --yes tsx --test src/km.test.ts"
   },
   "devDependencies": {
-    "@playwright/test": "^1.63.0",
     "typescript": "~6.0.2",
     "vite": "^8.3.0"
-  },
-  "dependencies": {
-    "@babylonjs/core": "^9.27.1"
   }
 }

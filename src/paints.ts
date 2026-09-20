@@ -135,51 +135,45 @@ export function mixTubePaints(
   ])
 }
 
-export type SimFeel = {
-  damping: number
-  gravity: number
-  cohesion: number
-  mix: number
-  iterations: number
-  gloss: number
-  rest: number
-  /** Kinematic-ish viscosity. Water ~0.1, tar ~5. Drives resistance, drip, mix rate. */
+/** Oil-paint feel for the MLS-MPM tray. Slider is never water. */
+export type PaintFeel = {
+  /** Implicit kinematic viscosity on the grid (Batty–Bridson Jacobi). */
   viscosity: number
-  /** 0 = energetic FLIP, 1 = heavily PIC (paste that holds a mound). */
-  picBlend: number
-  /** Tray-slope drainage. High for thin paint, near-zero for tar. */
-  slope: number
-  /** Static friction on the porcelain once paint is almost still. */
-  friction: number
+  /** Tait/EOS stiffness. Low = holds a bead; high = spreads. */
+  stiffness: number
+  /** Surface contraction so glops stay rounded. */
+  cohesion: number
+  /** Per-step lerp of particle K/S toward the mass-weighted cell mix. */
+  mixRate: number
+  restDensity: number
+  sleepSpeed: number
+  jacobi: number
+  damping: number
 }
 
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t
 }
 
-export function simFromViscosity(t: number): SimFeel {
+export function feelFromSlider(t: number): PaintFeel {
   const x = Math.min(1, Math.max(0, t))
   const x2 = x * x
   return {
-    damping: lerp(0.82, 0.988, x),
-    gravity: lerp(3.1, 0.14, x),
-    cohesion: lerp(0.07, 1.32, x),
-    mix: lerp(0.7, 0.008, x),
-    iterations: Math.round(lerp(2, 12, x)),
-    gloss: lerp(0.34, 0.98, x),
-    rest: lerp(0.74, 0.9, x),
-    viscosity: lerp(0.07, 6.2, x2 * 0.4 + x * 0.6),
-    picBlend: lerp(0.32, 0.97, x),
-    slope: lerp(1.55, 0.008, x),
-    friction: lerp(0.35, 7.2, x),
+    viscosity: lerp(28, 420, x2 * 0.55 + x * 0.45),
+    stiffness: lerp(22, 7.5, x),
+    cohesion: lerp(1.8, 5.4, x),
+    mixRate: lerp(0.012, 0.00035, x),
+    restDensity: lerp(4.6, 5.8, x),
+    sleepSpeed: lerp(0.55, 0.22, x),
+    jacobi: Math.round(lerp(8, 16, x)),
+    damping: lerp(0.965, 0.912, x),
   }
 }
 
 export function viscosityName(t: number): string {
-  if (t < 0.18) return 'Water'
-  if (t < 0.4) return 'Ink'
-  if (t < 0.58) return 'Cream'
-  if (t < 0.82) return 'Honey'
+  if (t < 0.28) return 'Soft oil'
+  if (t < 0.55) return 'Heavy oil'
+  if (t < 0.8) return 'Impasto'
   return 'Tar'
 }
 

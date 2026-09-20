@@ -30,7 +30,7 @@ const XYZ_TO_RGB = [
 const WHITE_Y = dot(D65, YBAR)
 
 /** d(linear RGB) / d(R(λ_i)) — constant because XYZ is linear in reflectance. */
-const RGB_FROM_BAND: number[][] = WAVELENGTHS.map((_, i) => {
+export const RGB_FROM_BAND: number[][] = WAVELENGTHS.map((_, i) => {
   const s = D65[i]! / WHITE_Y
   const X = s * XBAR[i]!
   const Y = s * YBAR[i]!

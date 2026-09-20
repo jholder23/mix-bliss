@@ -1,10 +1,8 @@
 # Impasto
 
-A 3D wet-paint mixer. The tray sits in a small studio you can orbit from any direction. Paint is a viscous particle fluid that piles into real mounds, then gets rendered as a continuous oil surface with thickness-based subsurface scattering, a GGX clearcoat, contact shadows, and ray-marched reflections.
+Top-down oil on a porcelain tray. Glop a still bead, then fold it with a palette knife. No orbit camera, no extra tools.
 
-It is framed like the viral macro HD oil-mixing videos: shallow focus, studio softbox, wet-film grain.
-
-This is the ASMR swirl, not a studio tool.
+It is meant to read like an overhead #paintmixing macro: thick wet oil, sitting still until you scrape it.
 
 ## Run it
 
@@ -13,60 +11,45 @@ npm install
 npm run dev
 ```
 
-Then open the URL Vite prints. This project pins **port 43147**.
+Open **http://127.0.0.1:43147**. The project pins that port. WebGL2 with floating-point color buffers is required.
 
 ```bash
 npm run build
 npm run preview
 ```
 
-WebGL2 is required. Software renderers (SwiftShader included) still get the 3D camera, volume, and wet-oil lighting — just a bit softer.
+## How to mix
+
+- **Glop** — tap the tray to lay a still bead of the selected tube. Drag to space more beads. Holding still does not keep pumping.
+- **Scraper** — a palette knife. Drag to strain and fold existing paint. It never dumps color.
+- **Blank tray** — wipe everything off.
+- **Viscosity** — soft oil through impasto to tar. Thicker paint resists and marbles longer.
+- **Size** — bead radius and knife width.
+
+Paint stays in the tray. At rest the surface is frozen (zero velocity). Only the knife wakes it.
+
+## Solver
+
+This is not Houdini, and it is not the old Babylon particle-blob look.
+
+- **MLS-MPM** (Hu, Fang, Ge, Qu, Zhu, Pradhana, Jiang, SIGGRAPH 2018) on a 2D tray grid, with quadratic B-splines and APIC affine transfers. Implementation follows Hu’s 88-line solver and nialltl’s MLS-MPM notes.
+- **Newtonian fluid stress** from nialltl: Tait-style pressure from gathered density, plus a weak explicit viscous term from the velocity gradient **C**.
+- **Implicit viscosity** on the grid after P2G (Batty & Bridson 2008 idea, cheap decoupled Jacobi — not a full variational Stokes solve). That is what makes oil sit instead of splash.
+- **No in-plane gravity.** A level tray does not crawl.
+- **Sleep:** when speeds fall below a threshold and the knife is up, velocity and **C** are zeroed and the solver skips.
+
+Pigments are Kubelka–Munk **K/S** spectra from `src/km.ts`, carried as mass on particles. Overlapping cells mix by mass, so two tubes fold and marble instead of RGB-lerping to brown. Homogenization is slow on purpose.
+
+Rendering is a high-resolution Gaussian film of mass + K + S, shaded as an opaque wet layer with a simple dielectric glint. No IBL, SSR, DoF, or grain this pass.
 
 ## Tests
-
-Unit tests cover Kubelka–Munk mixing (fast, no browser):
 
 ```bash
 npm run test:unit
 ```
 
-Playwright looks at the running 3D mixer: the WebGL canvas, camera chips, glop color, and mix tools. Headless Chromium is enough — no screen recordings.
+Covers KM mixing only (blue+yellow → green, and so on).
 
-```bash
-npm test
-```
+## Limits
 
-or
-
-```bash
-npm run test:e2e
-```
-
-The suite reuses Vite on **port 43147** if it is already running; otherwise it starts `npm run dev`. Screenshots from a run land in `test-results/`.
-
-## How to mix
-
-- **Glop** — tap the dish to dump a 3D mound of the selected tube color. Drag to lay spaced beads. Holding still does not keep pumping.
-- **Finger / Knife / Stick** — fold existing paint only. They never dump color. Folded pigments mix with Kubelka–Munk two-constant theory (absorption K and scattering S, weighted by overlapping paint mass), so red+yellow goes orange/ochre and blue+yellow goes green, not a muddy RGB average.
-- **Look** — left-drag to tumble the camera in any direction.
-- **Right-drag or middle-drag** always orbits, even while a mix tool is selected.
-- **Scroll** (or pinch) to zoom. Arrow keys also orbit.
-- **Camera angles** — 3/4, Top, Front, Side, Low, Back, Under. Under looks up at the dish from below. You can keep dragging past the horizon to flip underneath.
-- **Viscosity** — water through honey to tar. Heavier paint sits up; thinner paint slumps and mixes faster.
-- **Scrape** — wipe the tray.
-
-The fluid is a 3D particle pile colliding in the bowl. Each frame it is splatted into a height field so the surface reads as one wet body instead of a handful of grapes. Overlapping columns mix in spectral KM space from actual paint height, then convert to display sRGB.
-
-Overlapping paint does **not** lerp RGB. Each tube stores Kubelka–Munk absorption **K(λ)** and scattering **S(λ)**. Concentration is paint mass (particle volume, then mound height on the dish). Mix tools only fold those coefficients. Ultramarine + hansa yellow goes green, cadmium red + yellow goes orange, and complements collapse toward brown/olive instead of a bright digital average. A single-tube glop still matches its swatch.
-
-## Lighting
-
-The paint shader is built to look like wet oil on a software GPU:
-
-- Thickness-based **subsurface scattering** (chromatic; red travels farther)
-- **GGX** specular plus a tight **clearcoat**
-- World-space **ray-marched reflections** of neighboring mounds and the porcelain
-- **Contact shadows** along the key light
-- Studio **IBL** (softbox + window) so highlights move when you orbit
-
-The default view is a 3/4 **macro** close-up. ACES tone mapping, shallow depth of field, gentle grain, chromatic aberration, and vignette grade the frame like an HD camera. SwiftShader drops DoF/SSR but keeps the filmic grade.
+Interactive MLS-MPM on a modest grid, not a studio solver. Extreme folds can homogenize faster than real impasto. Lighting is a stand-in for a copy-stand key, not measured oil BRDF. If WebGL2 float targets are missing, the page says so and stops.

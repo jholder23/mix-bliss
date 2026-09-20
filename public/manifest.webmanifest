@@ -1,11 +1,11 @@
 {
-  "name": "Impasto — wet paint mixer",
+  "name": "Impasto — oil on a tray",
   "short_name": "Impasto",
-  "description": "Stir thick, glossy paint with your finger.",
+  "description": "Top-down oil paint. Glop a still bead, then fold it with a scraper.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#1a1410",
-  "theme_color": "#1a1410",
+  "background_color": "#6b5e50",
+  "theme_color": "#6b5e50",
   "icons": [
     {
       "src": "/favicon.svg",
