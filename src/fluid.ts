@@ -98,7 +98,7 @@ export class PaintFluid {
     this.map.wrapU = Texture.CLAMP_ADDRESSMODE
     this.map.wrapV = Texture.CLAMP_ADDRESSMODE
 
-    const mat = createPaintMaterial(scene, software)
+    const mat = createPaintMaterial(scene)
     mat.setTexture('paintMap', this.map)
     mat.setFloat('trayR', TRAY_R)
     mat.setFloat('heightScale', HEIGHT_SCALE)
@@ -404,7 +404,6 @@ export class PaintFluid {
       v[i + 1] = trayHeight(x, z) + this.sampleHeight(x, z)
     }
     this.mesh.updateVerticesData(VertexBuffer.PositionKind, v, false)
-    this.mesh.createNormals(true)
     this.mesh.refreshBoundingInfo()
   }
 
