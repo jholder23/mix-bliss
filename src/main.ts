@@ -54,6 +54,7 @@ type Stroke = {
   moved: number
   started: number
   lastGlop: number
+  dir: [number, number]
 }
 
 const strokes = new Map<number, Stroke>()
@@ -90,12 +91,19 @@ function glopAt(uv: [number, number], strength: number): void {
 
 function mixAt(uv: [number, number], delta: [number, number], steps: number): void {
   const radius = toolRadius()
-  const depthScale = tool === 'knife' ? 0.55 : tool === 'stick' ? 0.22 : 0.38
-  const pushScale = tool === 'knife' ? 0.35 : tool === 'stick' ? 1.35 : 0.95
-  const dragScale = tool === 'knife' ? 1.45 : 1
+  const depthScale = tool === 'knife' ? 0.62 : tool === 'stick' ? 0.22 : 0.38
+  const pushScale = tool === 'knife' ? 0.28 : tool === 'stick' ? 1.45 : 0.95
+  const dragScale = tool === 'knife' ? 1.7 : 1
   const depth = (feel.fingerDepth * depthScale) / steps
   const push = (feel.fingerPush * pushScale) / steps
   const drag = feel.splatForce * dragScale
+  if (tool === 'knife') {
+    const len = radius * 1.2
+    const width = radius * 0.32
+    engine.displaceBlade(uv, delta, len, width, depth)
+    engine.nudgeRadial(uv, delta, radius, push, drag)
+    return
+  }
   engine.displaceHeight(uv, radius, depth)
   engine.nudgeRadial(uv, delta, radius, push, drag)
 }
@@ -171,6 +179,7 @@ canvas.addEventListener('pointerdown', (event) => {
     moved: 0,
     started: performance.now(),
     lastGlop: 0,
+    dir: [1, 0],
   })
   canvas.style.cursor = 'none'
   if (tool === 'glop') {
@@ -195,6 +204,7 @@ canvas.addEventListener('pointermove', (event) => {
     const dy = uv[1] - stroke.prev[1]
     const dist = Math.hypot(dx, dy)
     stroke.moved += dist
+    if (dist > 1e-5) stroke.dir = [dx, dy]
     const radius = toolRadius()
     const steps = Math.max(1, Math.ceil(dist / (radius * 0.22)))
     for (let i = 1; i <= steps; i++) {
@@ -267,12 +277,26 @@ function frame(now: number): void {
     }
   }
   const fingers: { uv: [number, number]; radius: number }[] = []
+  let overlayKind = 0
+  let overlayUv: [number, number] = [0, 0]
+  let overlayRadius = 0
+  let overlayDir: [number, number] = [1, 0]
   if (tool === 'finger') {
     for (const stroke of strokes.values()) {
       if (stroke.prev) fingers.push({ uv: stroke.prev, radius: toolRadius() })
     }
+  } else if (tool === 'knife' || tool === 'stick') {
+    for (const stroke of strokes.values()) {
+      if (!stroke.prev) continue
+      overlayKind = tool === 'knife' ? 2 : 3
+      overlayUv = stroke.prev
+      overlayRadius = toolRadius()
+      overlayDir = stroke.dir
+      break
+    }
   }
   engine.setFingers(fingers, hexToRgb(selected.hex))
+  engine.setTool(overlayKind, overlayUv, overlayRadius, overlayDir)
   engine.step(dt)
   engine.render(light, now * 0.001)
   requestAnimationFrame(frame)

@@ -71,18 +71,53 @@ vec3 kmMix(vec3 a, float wa, vec3 b, float wb) {
   return clamp(exp(-(aa * wa + ab * wb) / w), 0.0, 1.0);
 }
 
+float hash(vec2 p) {
+  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+
 void main() {
   vec2 p = vUv - uPoint;
   p.x *= uAspect;
   float r = max(uRadius, 1e-5);
-  float t = clamp(1.0 - length(p) / r, 0.0, 1.0);
-  float dome = pow(t, 1.55);
+  float ang = atan(p.y, p.x);
+  float wobble = 0.84 + 0.12 * sin(ang * 4.0 + hash(uPoint) * 6.28) + 0.08 * hash(p * 18.0 + uPoint);
+  float t = clamp(1.0 - length(p) / (r * wobble), 0.0, 1.0);
+  float dome = pow(t, 1.75) * mix(0.55, 1.15, t);
   float add = dome * uStrength;
   vec4 base = texture(uTarget, vUv);
-  float newA = min(base.a + add, 3.2);
+  float newA = min(base.a + add, 3.4);
   vec3 mixed = kmMix(base.rgb, max(base.a, 0.001), uColor, add);
   if (base.a < 0.002) mixed = uColor;
   fragColor = vec4(mixed, newA);
+}
+`
+
+export const displaceBlade = `#version 300 es
+precision highp float;
+in vec2 vUv;
+out vec4 fragColor;
+uniform sampler2D uTarget;
+uniform vec2 uPoint;
+uniform vec2 uDir;
+uniform float uLength;
+uniform float uWidth;
+uniform float uAspect;
+uniform float uDepth;
+
+void main() {
+  vec2 p = vUv - uPoint;
+  p.x *= uAspect;
+  vec2 t = length(uDir) > 1e-5 ? normalize(uDir) : vec2(1.0, 0.0);
+  vec2 n = vec2(-t.y, t.x);
+  vec2 local = vec2(dot(p, t), dot(p, n));
+  float ell = length(vec2(local.x / max(uLength, 1e-5), local.y / max(uWidth, 1e-5)));
+  float groove = exp(-ell * ell * 1.8);
+  float rim = exp(-pow(ell - 0.92, 2.0) / 0.06);
+  vec4 base = texture(uTarget, vUv);
+  float h = base.a;
+  h = max(0.0, h - groove * uDepth);
+  h = min(3.4, h + rim * uDepth * 1.15);
+  fragColor = vec4(base.rgb, h);
 }
 `
 
@@ -307,6 +342,8 @@ uniform vec4 uFinger0;
 uniform vec4 uFinger1;
 uniform vec4 uFinger2;
 uniform vec3 uFingerTint;
+uniform vec4 uTool;
+uniform vec2 uToolDir;
 
 const float PI = 3.14159265;
 
@@ -509,13 +546,34 @@ void main() {
   color *= cavity;
   color += pigment * vec3(1.0, 0.25, 0.08) * pow(1.0 - NdotV, 2.4) * 0.12 * thick;
 
-  float nPaper = 0.92 + 0.06 * fbm(vUv * vec2(uAspect, 1.0) * 38.0);
-  float weave = 0.97 + 0.03 * sin(gl_FragCoord.x * 0.47) * sin(gl_FragCoord.y * 0.47);
-  vec3 ceramic = vec3(0.90, 0.86, 0.78) * nPaper * weave;
-  ceramic *= 0.55 + 0.45 * clamp(dot(vec3(0.0, 0.0, 1.0), key), 0.0, 1.0);
-  float rimAO = smoothstep(0.28, 0.0, h) * smoothstep(0.0, 0.1, h);
-  ceramic *= 1.0 - rimAO * 0.28;
-  ceramic *= 1.0 - (1.0 - cavity) * 0.25 * cover;
+  float occlude = 1.0;
+  vec2 lxy = key.xy;
+  float llen = length(lxy);
+  if (llen > 1e-4) {
+    lxy /= llen;
+    for (int i = 1; i <= 7; i++) {
+      float fi = float(i);
+      vec2 suv = vUv + vec2(lxy.x / max(uAspect, 0.001), lxy.y) * fi * px.y * 5.5;
+      float hs = heightAt(suv);
+      if (hs > h + 0.05 + fi * 0.035) {
+        occlude = mix(0.42, 1.0, fi / 8.0);
+        break;
+      }
+    }
+  }
+  color *= occlude;
+
+  float nPaper = 0.90 + 0.08 * fbm(vUv * vec2(uAspect, 1.0) * 52.0);
+  float grit = 0.97 + 0.03 * fbm(vUv * vec2(uAspect, 1.0) * 140.0);
+  float weave = 0.98 + 0.02 * sin(gl_FragCoord.x * 0.41) * sin(gl_FragCoord.y * 0.41);
+  vec3 ceramic = vec3(0.89, 0.845, 0.76) * nPaper * grit * weave;
+  vec3 trayN = vec3((fbm(vUv * 30.0) - 0.5) * 0.08, (fbm(vUv * 31.0 + 3.0) - 0.5) * 0.08, 1.0);
+  trayN = normalize(trayN);
+  ceramic *= 0.48 + 0.52 * clamp(dot(trayN, key), 0.0, 1.0);
+  ceramic += pow(clamp(dot(trayN, normalize(key + V)), 0.0, 1.0), 80.0) * vec3(1.0, 0.97, 0.92) * 0.08;
+  float rimAO = smoothstep(0.22, 0.0, h) * smoothstep(0.0, 0.08, h);
+  ceramic *= 1.0 - rimAO * 0.38;
+  ceramic *= 1.0 - (1.0 - cavity) * 0.22 * cover;
 
   vec3 painted = mix(ceramic, color, cover);
   painted += env * 0.04 * (1.0 - cover);
@@ -543,6 +601,38 @@ void main() {
       shadow += smoothstep(uFinger2.z * 2.2, uFinger2.z * 0.65, length(vec2((vUv.x - uFinger2.x) * uAspect, vUv.y - uFinger2.y))) * 0.32;
     }
     painted *= 1.0 - clamp(shadow, 0.0, 0.45);
+  }
+
+  float kind = uTool.w;
+  if (kind > 1.5) {
+    vec2 tp = vUv - uTool.xy;
+    tp.x *= uAspect;
+    vec2 td = length(uToolDir) > 1e-5 ? normalize(uToolDir) : vec2(1.0, 0.0);
+    vec2 tn = vec2(-td.y, td.x);
+    vec2 loc = vec2(dot(tp, td), dot(tp, tn));
+    if (kind < 2.5) {
+      float hw = uTool.z * 0.38;
+      float hl = uTool.z * 1.15;
+      float blade = max(abs(loc.x) / hl, abs(loc.y) / hw);
+      if (blade < 1.0) {
+        float edge = 1.0 - blade;
+        vec3 metal = vec3(0.62, 0.64, 0.66);
+        metal += pow(edge, 3.0) * vec3(0.9, 0.92, 0.95) * 0.55;
+        metal *= 0.45 + 0.55 * clamp(dot(vec3(0.15, 0.2, 0.97), key), 0.0, 1.0);
+        painted = mix(painted, metal, smoothstep(0.0, 0.18, edge));
+        painted += pow(clamp(dot(vec3(0.1, 0.25, 0.96), normalize(key + V)), 0.0, 1.0), 70.0) * 0.28 * edge;
+      }
+    } else {
+      float rad = uTool.z * 0.55;
+      float d = length(vec2(loc.x * 0.35, loc.y));
+      if (d < rad) {
+        float z = sqrt(max(rad * rad - d * d, 0.0));
+        vec3 sn = normalize(vec3(loc.y, loc.x * 0.2, z));
+        vec3 wood = vec3(0.45, 0.28, 0.14) * (0.7 + 0.3 * fbm(loc * 40.0));
+        wood *= 0.4 + 0.6 * clamp(dot(sn, key), 0.0, 1.0);
+        painted = mix(painted, wood, smoothstep(0.0, rad * 0.25, rad - d));
+      }
+    }
   }
 
   vec2 q = vUv - 0.5;
