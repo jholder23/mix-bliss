@@ -201,18 +201,23 @@ function dishScreen(): { x: number; y: number } {
 function waitFrames(n: number): Promise<void> {
   return new Promise((resolve) => {
     let left = Math.max(1, n)
+    let done = false
+    const finish = () => {
+      if (done) return
+      done = true
+      scene.onAfterRenderObservable.remove(obs)
+      resolve()
+    }
     const obs = scene.onAfterRenderObservable.add(() => {
-      if (--left <= 0) {
-        scene.onAfterRenderObservable.remove(obs)
-        resolve()
-      }
+      if (--left <= 0) finish()
     })
+    window.setTimeout(finish, 2500)
   })
 }
 
 async function sampleFrame(): Promise<{ mean: [number, number, number]; variance: number; px: number }> {
-  const sw = 80
-  const sh = 80
+  const sw = 48
+  const sh = 48
   const rw = engine.getRenderWidth()
   const rh = engine.getRenderHeight()
   const x = Math.max(0, Math.floor(rw / 2 - sw / 2))
