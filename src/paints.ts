@@ -162,16 +162,16 @@ export function simFromViscosity(t: number): SimFeel {
   const x2 = x * x
   return {
     damping: lerp(0.82, 0.988, x),
-    gravity: lerp(2.6, 0.18, x),
-    cohesion: lerp(0.1, 1.22, x),
-    mix: lerp(0.62, 0.01, x),
+    gravity: lerp(3.1, 0.14, x),
+    cohesion: lerp(0.07, 1.32, x),
+    mix: lerp(0.7, 0.008, x),
     iterations: Math.round(lerp(2, 12, x)),
     gloss: lerp(0.34, 0.98, x),
     rest: lerp(0.74, 0.9, x),
-    viscosity: lerp(0.09, 5.4, x2 * 0.35 + x * 0.65),
-    picBlend: lerp(0.42, 0.96, x),
-    slope: lerp(1.15, 0.012, x),
-    friction: lerp(0.55, 6.4, x),
+    viscosity: lerp(0.07, 6.2, x2 * 0.4 + x * 0.6),
+    picBlend: lerp(0.32, 0.97, x),
+    slope: lerp(1.55, 0.008, x),
+    friction: lerp(0.35, 7.2, x),
   }
 }
 

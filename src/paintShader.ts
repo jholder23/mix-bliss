@@ -173,7 +173,7 @@ vec3 marchReflect(vec3 p, vec3 r) {
 
 void main() {
   vec4 s = texture2D(paintMap, vUv);
-  if (s.a < 0.012) discard;
+  if (s.a < 0.008) discard;
 
   vec3 pigment = clamp(s.rgb, 0.0, 1.0);
   float luma = dot(pigment, vec3(0.2126, 0.7152, 0.0722));
@@ -245,12 +245,12 @@ void main() {
   float meniscus = smoothstep(0.004, 0.032, h) * (1.0 - smoothstep(0.04, 0.12, h));
   col += vec3(0.98, 0.96, 0.92) * coatF * meniscus * (0.12 + 0.32 * gloss);
 
-  col *= mix(1.0, contactShadow(vW + N * 0.007, L), 0.58);
+  col *= mix(1.0, contactShadow(vW + N * 0.007, L), 0.42);
   float side = pow(clamp(1.0 - abs(N.y), 0.0, 1.0), 1.12);
-  col += film * side * 0.16;
-  col += studioEnv(N) * film * 0.11;
-  col += floorCol * film * pow(max(-N.y, 0.0), 1.5) * 0.07;
-  col = max(col, film * wrap * keyCol * 0.5);
+  col += film * side * 0.18;
+  col += studioEnv(N) * film * 0.14;
+  col += floorCol * film * pow(max(-N.y, 0.0), 1.5) * 0.08;
+  col = max(col, film * (0.22 + wrap * keyCol * 0.48));
 
   col += (hash(gl_FragCoord.xy) - 0.5) * 0.002;
   gl_FragColor = vec4(max(col, 0.0), 1.0);

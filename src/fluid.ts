@@ -805,8 +805,8 @@ export class PaintFluid {
     const worldTo = res / (TRAY_R * 2)
     const colorTo = cres / (TRAY_R * 2)
     const n = this.count
-    const sigmaH = this.software ? 0.1 : 0.082
-    const sigmaC = this.software ? 0.14 : 0.12
+    const sigmaH = this.software ? 0.12 : 0.09
+    const sigmaC = this.software ? 0.16 : 0.13
     const rH = sigmaH * 2.45
     const rH2 = rH * rH
     const rC = sigmaC * 2.35
@@ -990,6 +990,8 @@ export class PaintFluid {
     }
 
     this.holeFill()
+    this.holeFill()
+    this.closePinholes()
     this.blurPass(true)
     this.blurPass(false)
     this.blurPass(true)
@@ -1024,12 +1026,48 @@ export class PaintFluid {
             ws += w
           }
         }
-        if (n >= 5) {
-          this.tmpH[i] = (hs / n) * 0.82
+        if (n >= 3) {
+          this.tmpH[i] = (hs / n) * 0.88
           this.tmpR[i] = rs / n
           this.tmpG[i] = gs / n
           this.tmpB[i] = bs / n
           this.tmpW[i] = ws / n
+        }
+      }
+    }
+  }
+
+  private closePinholes(): void {
+    const res = this.res
+    for (let z = 1; z < res - 1; z++) {
+      for (let x = 1; x < res - 1; x++) {
+        const i = z * res + x
+        const h = this.tmpH[i] ?? 0
+        let maxN = 0
+        let rs = 0
+        let gs = 0
+        let bs = 0
+        let n = 0
+        for (let oz = -1; oz <= 1; oz++) {
+          for (let ox = -1; ox <= 1; ox++) {
+            if (!ox && !oz) continue
+            const j = (z + oz) * res + (x + ox)
+            const hn = this.tmpH[j] ?? 0
+            if (hn > maxN) maxN = hn
+            if ((this.tmpW[j] ?? 0) > 1e-5) {
+              n++
+              rs += this.tmpR[j] ?? 0
+              gs += this.tmpG[j] ?? 0
+              bs += this.tmpB[j] ?? 0
+            }
+          }
+        }
+        if (maxN > 0.028 && h < maxN * 0.22 && n >= 4) {
+          this.tmpH[i] = maxN * 0.62
+          this.tmpW[i] = Math.max(this.tmpW[i] ?? 0, 1)
+          this.tmpR[i] = rs / n
+          this.tmpG[i] = gs / n
+          this.tmpB[i] = bs / n
         }
       }
     }
