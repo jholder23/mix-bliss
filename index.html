@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1, user-scalable=no"
+    />
+    <meta name="theme-color" content="#1a1410" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta
+      name="description"
+      content="Stir thick, glossy paint with your finger. A satisfying mixer, not a painting tool."
+    />
+    <title>Impasto — wet paint mixer</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <canvas id="canvas" aria-label="Wet paint canvas"></canvas>
+
+    <div id="fail" class="fail" hidden>
+      <p>This mixer needs WebGL2, which this browser does not provide. Try a current mobile Safari, Chrome, or Firefox.</p>
+    </div>
+
+    <p id="hint" class="hint">Drag through the paint. Tap to drop a blob.</p>
+
+    <aside class="tray" aria-label="Paint controls">
+      <header class="brand">
+        <div>
+          <h1>Impasto</h1>
+          <p>Satisfying wet paint. Not useful. On purpose.</p>
+        </div>
+      </header>
+
+      <div class="swatches" role="listbox" aria-label="Paint colors" id="swatches"></div>
+
+      <label class="slider">
+        <span class="slider-meta">
+          <span>Viscosity</span>
+          <strong id="visc-label">Honey</strong>
+        </span>
+        <input id="viscosity" type="range" min="0" max="100" value="72" />
+        <span class="ticks" aria-hidden="true">
+          <span>Water</span>
+          <span>Cream</span>
+          <span>Honey</span>
+          <span>Tar</span>
+        </span>
+      </label>
+
+      <div class="actions">
+        <button id="finger" class="toggle on" type="button" aria-pressed="true">
+          Finger: loaded
+        </button>
+        <button id="pour" type="button">Pour</button>
+        <button id="scrape" type="button">Scrape</button>
+        <button id="sound" class="toggle" type="button" aria-pressed="false">Sound</button>
+      </div>
+    </aside>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
