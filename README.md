@@ -38,11 +38,11 @@ npm run preview
 
 ## How to mix
 
-- **Drag** to stir. Highlights follow your finger.
-- **Tap** to drop a blob of the selected tube.
-- **Finger: loaded** lays color down as you drag. **Clean** only pushes what is already there.
-- **Viscosity** runs from water (eddies, fast mixing) through cream and honey (slow, glossy folds) to tar (paste that barely moves unless you shove it).
-- **Pour** dumps a fresh mess. **Scrape** wipes the linen.
+- **Press and drag** to push a fingertip through the paint. It parts the surface, piles ridges, and leaves a wet groove.
+- **Tap** to drop a dome of the selected tube.
+- **Finger: loaded** transfers color from the fingertip. **Clean** only shoves what is already there.
+- **Viscosity** runs from water (thin, leveling) through honey (slow glossy folds) to tar (paste that holds peaks).
+- **Pour** dumps a fresh pile. **Scrape** wipes the tray.
 - **Sound** is optional wet noise, tied to how fast you stir.
 
 Works with mouse, trackpad, and multi-touch. WebGL2 is required.

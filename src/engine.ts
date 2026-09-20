@@ -193,7 +193,9 @@ export class PaintEngine {
   private pressure!: DoubleFbo
 
   private splatAdd!: Program
+  private splatRadialProg!: Program
   private splatPaintProg!: Program
+  private displaceHeightProg!: Program
   private advection!: Program
   private divergenceProg!: Program
   private clearProg!: Program
@@ -202,7 +204,16 @@ export class PaintEngine {
   private curlProg!: Program
   private vorticityProg!: Program
   private viscosityProg!: Program
+  private levelProg!: Program
+  private slopeProg!: Program
   private displayProg!: Program
+  private fingers: [number, number, number, number][] = [
+    [0, 0, 0, 0],
+    [0, 0, 0, 0],
+    [0, 0, 0, 0],
+  ]
+  private fingerTint: [number, number, number] = [0.83, 0.22, 0.16]
+  private time = 0
 
   constructor(canvas: HTMLCanvasElement, feel: PaintFeel) {
     this.canvas = canvas
@@ -229,7 +240,9 @@ export class PaintEngine {
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0)
 
     this.splatAdd = createProgram(gl, S.vert, S.splatAdd)
+    this.splatRadialProg = createProgram(gl, S.vert, S.splatRadial)
     this.splatPaintProg = createProgram(gl, S.vert, S.splatPaint)
+    this.displaceHeightProg = createProgram(gl, S.vert, S.displaceHeight)
     this.advection = createProgram(gl, S.vert, S.advection)
     this.divergenceProg = createProgram(gl, S.vert, S.divergence)
     this.clearProg = createProgram(gl, S.vert, S.clearShader)
@@ -238,6 +251,8 @@ export class PaintEngine {
     this.curlProg = createProgram(gl, S.vert, S.curl)
     this.vorticityProg = createProgram(gl, S.vert, S.vorticity)
     this.viscosityProg = createProgram(gl, S.vert, S.viscosity)
+    this.levelProg = createProgram(gl, S.vert, S.levelHeight)
+    this.slopeProg = createProgram(gl, S.vert, S.slopeForce)
     this.displayProg = createProgram(gl, S.vert, S.display)
 
     this.rebuildTargets()
@@ -279,8 +294,8 @@ export class PaintEngine {
     this.deleteFbo(this.curlFbo)
     this.deleteDouble(this.pressure)
     const coarse = window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 720
-    const sim = getResolution(this.canvas.width, this.canvas.height, coarse ? 160 : 256)
-    const dye = getResolution(this.canvas.width, this.canvas.height, coarse ? 320 : 512)
+    const sim = getResolution(this.canvas.width, this.canvas.height, coarse ? 192 : 320)
+    const dye = getResolution(this.canvas.width, this.canvas.height, coarse ? 448 : 720)
     const velFilter = this.fmt.filter
     this.velocity = createDouble(gl, sim.w, sim.h, this.fmt, velFilter)
     this.dye = createDouble(gl, dye.w, dye.h, this.fmt, this.fmt.filter)
@@ -330,6 +345,47 @@ export class PaintEngine {
     gl.uniform1f(p.uniforms.uStrength, strength)
     this.blit(this.dye.write)
     this.dye.swap()
+  }
+
+  displaceHeight(uv: [number, number], radius: number, depth: number): void {
+    const gl = this.gl
+    const p = this.displaceHeightProg
+    gl.useProgram(p.id)
+    gl.uniform1i(p.uniforms.uTarget, 0)
+    gl.activeTexture(gl.TEXTURE0)
+    gl.bindTexture(gl.TEXTURE_2D, this.dye.read.tex)
+    gl.uniform2f(p.uniforms.uPoint, uv[0], uv[1])
+    gl.uniform1f(p.uniforms.uRadius, radius)
+    gl.uniform1f(p.uniforms.uAspect, this.aspect)
+    gl.uniform1f(p.uniforms.uDepth, depth)
+    this.blit(this.dye.write)
+    this.dye.swap()
+  }
+
+  nudgeRadial(uv: [number, number], delta: [number, number], radius: number, push: number, drag: number): void {
+    const gl = this.gl
+    const p = this.splatRadialProg
+    gl.useProgram(p.id)
+    gl.uniform1i(p.uniforms.uTarget, 0)
+    gl.activeTexture(gl.TEXTURE0)
+    gl.bindTexture(gl.TEXTURE_2D, this.velocity.read.tex)
+    gl.uniform2f(p.uniforms.uPoint, uv[0], uv[1])
+    gl.uniform2f(p.uniforms.uDelta, delta[0], delta[1])
+    gl.uniform1f(p.uniforms.uRadius, radius)
+    gl.uniform1f(p.uniforms.uAspect, this.aspect)
+    gl.uniform1f(p.uniforms.uPush, push)
+    gl.uniform1f(p.uniforms.uDrag, drag)
+    this.blit(this.velocity.write)
+    this.velocity.swap()
+  }
+
+  setFingers(list: { uv: [number, number]; radius: number }[], tint: [number, number, number]): void {
+    this.fingerTint = tint
+    for (let i = 0; i < 3; i++) {
+      const f = list[i]
+      if (f) this.fingers[i] = [f.uv[0], f.uv[1], f.radius, 1]
+      else this.fingers[i] = [0, 0, 0, 0]
+    }
   }
 
   scrape(): void {
@@ -389,6 +445,7 @@ export class PaintEngine {
     gl.uniform1i(this.advection.uniforms.uSource, 1)
     gl.uniform1f(this.advection.uniforms.uDt, clamped)
     gl.uniform1f(this.advection.uniforms.uDissipation, feel.velocityDissipation)
+    gl.uniform1f(this.advection.uniforms.uAlphaDissipation, 1)
     gl.activeTexture(gl.TEXTURE0)
     gl.bindTexture(gl.TEXTURE_2D, this.velocity.read.tex)
     gl.activeTexture(gl.TEXTURE1)
@@ -438,25 +495,79 @@ export class PaintEngine {
     gl.uniform1i(this.advection.uniforms.uSource, 1)
     gl.uniform1f(this.advection.uniforms.uDt, clamped)
     gl.uniform1f(this.advection.uniforms.uDissipation, feel.dyeDissipation)
+    gl.uniform1f(this.advection.uniforms.uAlphaDissipation, feel.heightDissipation)
     gl.activeTexture(gl.TEXTURE0)
     gl.bindTexture(gl.TEXTURE_2D, this.velocity.read.tex)
     gl.activeTexture(gl.TEXTURE1)
     gl.bindTexture(gl.TEXTURE_2D, this.dye.read.tex)
     this.blit(this.dye.write)
     this.dye.swap()
+
+    if (feel.heightLevel > 0.001) {
+      gl.useProgram(this.levelProg.id)
+      gl.uniform1i(this.levelProg.uniforms.uDye, 0)
+      gl.uniform2f(this.levelProg.uniforms.uTexelSize, this.dye.read.texel[0], this.dye.read.texel[1])
+      gl.uniform1f(this.levelProg.uniforms.uAmount, feel.heightLevel)
+      gl.activeTexture(gl.TEXTURE0)
+      gl.bindTexture(gl.TEXTURE_2D, this.dye.read.tex)
+      this.blit(this.dye.write)
+      this.dye.swap()
+    }
+
+    if (feel.slope > 0.0005) {
+      gl.useProgram(this.slopeProg.id)
+      gl.uniform1i(this.slopeProg.uniforms.uVelocity, 0)
+      gl.uniform1i(this.slopeProg.uniforms.uDye, 1)
+      gl.uniform2f(this.slopeProg.uniforms.uTexelSize, this.velocity.read.texel[0], this.velocity.read.texel[1])
+      gl.uniform1f(this.slopeProg.uniforms.uSlope, feel.slope)
+      gl.activeTexture(gl.TEXTURE0)
+      gl.bindTexture(gl.TEXTURE_2D, this.velocity.read.tex)
+      gl.activeTexture(gl.TEXTURE1)
+      gl.bindTexture(gl.TEXTURE_2D, this.dye.read.tex)
+      this.blit(this.velocity.write)
+      this.velocity.swap()
+    }
   }
 
-  render(light?: [number, number]): void {
+  render(light?: [number, number], time = 0): void {
     if (light) this.lastLight = light
+    this.time = time
     const gl = this.gl
     const p = this.displayProg
     gl.useProgram(p.id)
     gl.uniform1i(p.uniforms.uDye, 0)
+    gl.uniform1i(p.uniforms.uVelocity, 1)
     gl.uniform2f(p.uniforms.uTexelSize, this.dye.read.texel[0], this.dye.read.texel[1])
     gl.uniform2f(p.uniforms.uLight, this.lastLight[0], this.lastLight[1])
     gl.uniform1f(p.uniforms.uGloss, this.feel.gloss)
+    gl.uniform1f(p.uniforms.uTime, this.time)
+    gl.uniform1f(p.uniforms.uAspect, this.aspect)
+    gl.uniform4f(
+      p.uniforms.uFinger0,
+      this.fingers[0]?.[0] ?? 0,
+      this.fingers[0]?.[1] ?? 0,
+      this.fingers[0]?.[2] ?? 0,
+      this.fingers[0]?.[3] ?? 0,
+    )
+    gl.uniform4f(
+      p.uniforms.uFinger1,
+      this.fingers[1]?.[0] ?? 0,
+      this.fingers[1]?.[1] ?? 0,
+      this.fingers[1]?.[2] ?? 0,
+      this.fingers[1]?.[3] ?? 0,
+    )
+    gl.uniform4f(
+      p.uniforms.uFinger2,
+      this.fingers[2]?.[0] ?? 0,
+      this.fingers[2]?.[1] ?? 0,
+      this.fingers[2]?.[2] ?? 0,
+      this.fingers[2]?.[3] ?? 0,
+    )
+    gl.uniform3f(p.uniforms.uFingerTint, this.fingerTint[0], this.fingerTint[1], this.fingerTint[2])
     gl.activeTexture(gl.TEXTURE0)
     gl.bindTexture(gl.TEXTURE_2D, this.dye.read.tex)
+    gl.activeTexture(gl.TEXTURE1)
+    gl.bindTexture(gl.TEXTURE_2D, this.velocity.read.tex)
     this.blit(null)
   }
 }

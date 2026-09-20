@@ -21,51 +21,75 @@ export type PaintFeel = {
   viscosityIters: number
   velocityDissipation: number
   dyeDissipation: number
+  heightDissipation: number
   vorticity: number
   splatForce: number
   velocityRadius: number
   dyeRadius: number
   gloss: number
   pressureIters: number
+  heightLevel: number
+  slope: number
+  fingerDepth: number
+  fingerRadius: number
+  fingerPush: number
 }
 
 const WATER: PaintFeel = {
-  viscosity: 0.08,
+  viscosity: 0.1,
   viscosityIters: 1,
-  velocityDissipation: 0.985,
-  dyeDissipation: 0.992,
-  vorticity: 18,
-  splatForce: 1.15,
-  velocityRadius: 0.0016,
-  dyeRadius: 0.0034,
-  gloss: 0.35,
-  pressureIters: 14,
+  velocityDissipation: 0.988,
+  dyeDissipation: 0.995,
+  heightDissipation: 0.997,
+  vorticity: 12,
+  splatForce: 0.95,
+  velocityRadius: 0.042,
+  dyeRadius: 0.05,
+  gloss: 0.42,
+  pressureIters: 16,
+  heightLevel: 0.16,
+  slope: 0.09,
+  fingerDepth: 0.28,
+  fingerRadius: 0.046,
+  fingerPush: 0.55,
 }
 
 const HONEY: PaintFeel = {
-  viscosity: 0.72,
-  viscosityIters: 6,
-  velocityDissipation: 0.94,
-  dyeDissipation: 0.999,
-  vorticity: 3.2,
-  splatForce: 1.85,
-  velocityRadius: 0.0038,
-  dyeRadius: 0.0075,
-  gloss: 0.82,
-  pressureIters: 18,
+  viscosity: 0.78,
+  viscosityIters: 7,
+  velocityDissipation: 0.945,
+  dyeDissipation: 1,
+  heightDissipation: 1,
+  vorticity: 2.1,
+  splatForce: 1.55,
+  velocityRadius: 0.058,
+  dyeRadius: 0.072,
+  gloss: 0.92,
+  pressureIters: 20,
+  heightLevel: 0.028,
+  slope: 0.012,
+  fingerDepth: 0.62,
+  fingerRadius: 0.056,
+  fingerPush: 1.15,
 }
 
 const TAR: PaintFeel = {
-  viscosity: 0.94,
-  viscosityIters: 12,
-  velocityDissipation: 0.82,
+  viscosity: 0.96,
+  viscosityIters: 14,
+  velocityDissipation: 0.84,
   dyeDissipation: 1,
-  vorticity: 0.15,
-  splatForce: 2.4,
-  velocityRadius: 0.0065,
-  dyeRadius: 0.012,
-  gloss: 0.55,
-  pressureIters: 12,
+  heightDissipation: 1,
+  vorticity: 0.08,
+  splatForce: 2.05,
+  velocityRadius: 0.078,
+  dyeRadius: 0.1,
+  gloss: 0.7,
+  pressureIters: 14,
+  heightLevel: 0.006,
+  slope: 0.002,
+  fingerDepth: 0.92,
+  fingerRadius: 0.068,
+  fingerPush: 1.7,
 }
 
 function lerp(a: number, b: number, t: number): number {
@@ -84,6 +108,12 @@ function lerpFeel(a: PaintFeel, b: PaintFeel, t: number): PaintFeel {
     dyeRadius: lerp(a.dyeRadius, b.dyeRadius, t),
     gloss: lerp(a.gloss, b.gloss, t),
     pressureIters: Math.round(lerp(a.pressureIters, b.pressureIters, t)),
+    heightDissipation: lerp(a.heightDissipation, b.heightDissipation, t),
+    heightLevel: lerp(a.heightLevel, b.heightLevel, t),
+    slope: lerp(a.slope, b.slope, t),
+    fingerDepth: lerp(a.fingerDepth, b.fingerDepth, t),
+    fingerRadius: lerp(a.fingerRadius, b.fingerRadius, t),
+    fingerPush: lerp(a.fingerPush, b.fingerPush, t),
   }
 }
 

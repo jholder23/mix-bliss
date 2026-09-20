@@ -53,19 +53,24 @@ function toUv(event: PointerEvent): [number, number] {
 }
 
 function dropBlob(uv: [number, number], color = hexToRgb(selected.hex), scale = 1): void {
-  const radius = feel.dyeRadius * (1.35 + Math.random() * 0.8) * scale
-  engine.splatPaint(uv, color, radius, 1.15)
-  engine.splatVelocity(uv, [(Math.random() - 0.5) * 0.15, (Math.random() - 0.5) * 0.08], radius * 0.7)
+  const radius = feel.dyeRadius * (0.85 + Math.random() * 0.55) * scale
+  engine.splatPaint(uv, color, radius, 1.7)
+  const offset: [number, number] = [
+    uv[0] + (Math.random() - 0.5) * radius * 0.35,
+    uv[1] + (Math.random() - 0.5) * radius * 0.35,
+  ]
+  engine.splatPaint(offset, color, radius * 0.55, 0.55)
+  engine.nudgeRadial(uv, [(Math.random() - 0.5) * 0.08, (Math.random() - 0.5) * 0.06], radius * 0.8, 0.12, 0.4)
   audio.blob()
-  if (navigator.vibrate) navigator.vibrate(8)
+  if (navigator.vibrate) navigator.vibrate(10)
 }
 
 function pour(): void {
-  const count = 7 + Math.floor(Math.random() * 4)
+  const count = 5 + Math.floor(Math.random() * 3)
   for (let i = 0; i < count; i++) {
-    const tube = TUBES[Math.floor(Math.random() * TUBES.length)]
-    const uv: [number, number] = [0.18 + Math.random() * 0.64, 0.22 + Math.random() * 0.52]
-    dropBlob(uv, hexToRgb(tube.hex), 0.9 + Math.random() * 1.3)
+    const tube = TUBES[Math.floor(Math.random() * TUBES.length)] ?? { name: 'Cadmium Red', hex: '#d42a1e' }
+    const uv: [number, number] = [0.28 + Math.random() * 0.44, 0.34 + Math.random() * 0.36]
+    dropBlob(uv, hexToRgb(tube.hex), 1.05 + Math.random() * 1.15)
   }
 }
 
@@ -126,8 +131,10 @@ canvas.addEventListener('pointerdown', (event) => {
   const uv = toUv(event)
   light = uv
   strokes.set(event.pointerId, { id: event.pointerId, prev: uv, moved: 0, started: performance.now() })
+  engine.displaceHeight(uv, feel.fingerRadius, feel.fingerDepth * 0.18)
+  engine.nudgeRadial(uv, [0, 0], feel.fingerRadius, feel.fingerPush * 0.35, 0)
   if (loadedFinger) {
-    engine.splatPaint(uv, hexToRgb(selected.hex), feel.dyeRadius * 0.85, 0.55)
+    engine.splatPaint(uv, hexToRgb(selected.hex), feel.dyeRadius * 0.45, 0.38)
   }
   hideHint()
 })
@@ -142,14 +149,23 @@ canvas.addEventListener('pointermove', (event) => {
   if (stroke.prev) {
     const dx = uv[0] - stroke.prev[0]
     const dy = uv[1] - stroke.prev[1]
-    stroke.moved += Math.hypot(dx, dy)
-    const dt = Math.max(1 / 120, 1 / 60)
-    const force = feel.splatForce
-    engine.splatVelocity(uv, [(dx / dt) * force, (dy / dt) * force], feel.velocityRadius)
-    if (loadedFinger) {
-      engine.splatPaint(uv, hexToRgb(selected.hex), feel.dyeRadius * 0.55, 0.42)
+    const dist = Math.hypot(dx, dy)
+    stroke.moved += dist
+    const steps = Math.max(1, Math.ceil(dist / (feel.fingerRadius * 0.22)))
+    const depth = (feel.fingerDepth * 0.2) / steps
+    const push = (feel.fingerPush * 0.7) / steps
+    const drag = feel.splatForce
+    const color = hexToRgb(selected.hex)
+    for (let i = 1; i <= steps; i++) {
+      const t = i / steps
+      const p: [number, number] = [stroke.prev[0] + dx * t, stroke.prev[1] + dy * t]
+      engine.displaceHeight(p, feel.fingerRadius, depth)
+      engine.nudgeRadial(p, [dx, dy], feel.fingerRadius, push, drag)
+      if (loadedFinger) {
+        engine.splatPaint(p, color, feel.dyeRadius * 0.32, 0.16 / steps)
+      }
     }
-    audio.stir(Math.hypot(dx, dy) * 18)
+    audio.stir(dist * 22)
   }
   stroke.prev = uv
 })
@@ -210,8 +226,13 @@ window.addEventListener('resize', () => engine.resize())
 function frame(now: number): void {
   const dt = Math.min(0.033, (now - lastFrame) / 1000)
   lastFrame = now
+  const fingers: { uv: [number, number]; radius: number }[] = []
+  for (const stroke of strokes.values()) {
+    if (stroke.prev) fingers.push({ uv: stroke.prev, radius: feel.fingerRadius })
+  }
+  engine.setFingers(fingers, hexToRgb(selected.hex))
   engine.step(dt)
-  engine.render(light)
+  engine.render(light, now * 0.001)
   requestAnimationFrame(frame)
 }
 
