@@ -98,9 +98,11 @@ export class PaintFluid {
     )
     this.map.wrapU = Texture.CLAMP_ADDRESSMODE
     this.map.wrapV = Texture.CLAMP_ADDRESSMODE
+    this.map.hasAlpha = true
 
     const mat = createPaintMaterial(scene, software)
     mat.diffuseTexture = this.map
+    if (mat.diffuseTexture) mat.diffuseTexture.hasAlpha = true
     this.mesh.material = mat
     this.mesh.isPickable = false
     this.mesh.refreshBoundingInfo()
@@ -346,6 +348,7 @@ export class PaintFluid {
           const env = Math.sqrt(r2 - d2)
           const yTop = py + env
           const extra = Math.max(0, yTop - trayHeight(wx, wz))
+          if (Math.hypot(wx, wz) > TRAY_R - 0.04) continue
           const idx = iz * res + ix
           if (extra > (this.heights[idx] ?? 0)) this.heights[idx] = extra
           const w = env
@@ -402,7 +405,12 @@ export class PaintFluid {
       const z = b[i + 2] ?? 0
       v[i] = x
       v[i + 2] = z
-      v[i + 1] = trayHeight(x, z) + this.sampleHeight(x, z)
+      const h = this.sampleHeight(x, z)
+      if (Math.hypot(x, z) > TRAY_R - 0.02 || h < 0.012) {
+        v[i + 1] = -0.55
+      } else {
+        v[i + 1] = trayHeight(x, z) + h
+      }
     }
     this.mesh.updateVerticesData(VertexBuffer.PositionKind, v, false)
     this.mesh.createNormals(true)

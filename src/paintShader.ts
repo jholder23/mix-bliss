@@ -8,12 +8,12 @@ import {
 export function createPaintMaterial(scene: Scene, _software = false): StandardMaterial {
   const mat = new StandardMaterial('impastoPaint', scene)
   mat.diffuseColor = Color3.White()
-  mat.specularColor = new Color3(0.95, 0.93, 0.88)
-  mat.specularPower = 88
-  mat.ambientColor = new Color3(0.55, 0.55, 0.55)
+  mat.specularColor = new Color3(0.55, 0.54, 0.5)
+  mat.specularPower = 48
+  mat.ambientColor = new Color3(0.62, 0.62, 0.62)
   mat.useAlphaFromDiffuseTexture = true
   mat.transparencyMode = StandardMaterial.MATERIAL_ALPHATEST
-  mat.alphaCutOff = 0.05
+  mat.alphaCutOff = 0.08
   mat.backFaceCulling = false
   mat.reflectionTexture = scene.environmentTexture
   mat.reflectionFresnelParameters = new FresnelParameters()

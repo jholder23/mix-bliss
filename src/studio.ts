@@ -36,7 +36,7 @@ export const SHOTS: CameraShot[] = [
   { id: 'side', label: 'Side', alpha: 0.05, beta: 1.48, radius: 6.8 },
   { id: 'low', label: 'Low', alpha: -0.55, beta: 1.42, radius: 5.7 },
   { id: 'back', label: 'Back', alpha: 2.35, beta: 1.08, radius: 6.7 },
-  { id: 'under', label: 'Under', alpha: -0.7, beta: Math.PI - 0.22, radius: 6.4 },
+  { id: 'under', label: 'Under', alpha: -0.85, beta: 1.68, radius: 5.5 },
 ]
 
 function shortestAngle(from: number, to: number): number {
