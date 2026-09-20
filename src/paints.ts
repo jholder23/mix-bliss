@@ -14,10 +14,12 @@ export type Tube = {
 
 /**
  * Artist-tube masstone hex plus a spectral reflectance template.
- * Templates carry the mixing character (cadmium red absorbs green/blue,
- * hansa yellow reflects green-yellow, ultramarine keeps a cyan tail so
- * blue+yellow can go green). Scatter S is the KM two-constant scale:
- * cadmiums/white are more opaque; quinacridone/phthalo stain more.
+ * Templates carry mixing character, not an RGB lerp:
+ *   cadmium absorbs green/blue so 1:1 with hansa is orange, not pink
+ *   ultramarine keeps a cyan tail so blue+yellow goes olive-green
+ *   cerulean is a green-blue, so the same yellow mixes a brighter green
+ *   quin + phthalo complements masstone near-black (undertone stays magenta)
+ * Scatter S is KM two-constant opacity: cadmiums/white cover; quin/phthalo stain.
  */
 type TubeSpec = {
   name: string
@@ -37,8 +39,10 @@ const TUBE_SPECS: readonly TubeSpec[] = [
   {
     name: 'Quinacridone Magenta',
     hex: '#c2185b',
-    scatter: 0.42,
-    reflectance: [0.16, 0.1, 0.05, 0.045, 0.12, 0.55, 0.72, 0.48],
+    scatter: 0.4,
+    // Strong green-yellow absorption so a 1:1 with phthalo goes near-black
+    // (Javaherian: quinacridone + phthalo green masstone, undertone stays magenta).
+    reflectance: [0.14, 0.08, 0.03, 0.025, 0.06, 0.58, 0.76, 0.42],
   },
   {
     name: 'Naples Yellow',
@@ -67,8 +71,10 @@ const TUBE_SPECS: readonly TubeSpec[] = [
   {
     name: 'Phthalo Green',
     hex: '#0b6e56',
-    scatter: 0.34,
-    reflectance: [0.04, 0.08, 0.28, 0.42, 0.18, 0.05, 0.03, 0.025],
+    scatter: 0.3,
+    // Transparent stainer: high K in yellow-red, so complements neutralize
+    // instead of making additive yellow. Yellow leak kept low for a dark masstone.
+    reflectance: [0.03, 0.055, 0.26, 0.44, 0.08, 0.025, 0.016, 0.014],
   },
   {
     name: 'Burnt Sienna',

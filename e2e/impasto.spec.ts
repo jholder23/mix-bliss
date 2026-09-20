@@ -219,6 +219,11 @@ test('KM mixing is subtractive: red+yellow orange, blue+yellow green', async ({ 
   const violet = await page.evaluate(() => window.__impasto!.mix('Quinacridone Magenta', 'Ultramarine'))
   expect(inHueRange(violet.hue, 260, 340) || violet.rgb[2] > violet.rgb[1], `violet hue ${violet.hue} rgb=${violet.rgb}`).toBe(true)
 
+  const blackish = await page.evaluate(() => window.__impasto!.mix('Quinacridone Magenta', 'Phthalo Green'))
+  expect(blackish.lightness, `quin+phthalo should go dark, rgb=${blackish.rgb}`).toBeLessThan(0.4)
+  expect(blackish.chroma).toBeLessThan(0.22)
+  expect(blackish.rgb[1]).toBeLessThan(0.4)
+
   const masstone = await page.evaluate(() => window.__impasto!.masstone('Cadmium Red'))
   expect(masstone[0]).toBeGreaterThan(0.7)
   expect(masstone[0]).toBeGreaterThan(masstone[1] + 0.3)

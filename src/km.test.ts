@@ -73,6 +73,34 @@ describe('Kubelka-Munk mix', () => {
     assert.ok(luma(mixed) < Math.max(luma(lerp), 0.36) + 0.08)
   })
 
+  it('quinacridone + phthalo masstone is near-black, undertone stays a bit magenta', () => {
+    const mixed = mixTubePaints(mustTube('Quinacridone Magenta'), mustTube('Phthalo Green'), 1, 1)
+    const hue = srgbHueChroma(mixed)
+    assert.ok(luma(mixed) < 0.3, `masstone should look blackish, luma ${luma(mixed)} rgb=${mixed}`)
+    assert.ok(hue.c < 0.16, `should neutralize, chroma ${hue.c}`)
+    assert.ok(mixed[1] < 0.32, `not additive yellow, got ${mixed}`)
+    const undertone = mixPigmentsToSrgb([
+      { pigment: mustTube('Quinacridone Magenta').pigment, amount: 1 },
+      { pigment: mustTube('Phthalo Green').pigment, amount: 1 },
+      { pigment: mustTube('Titanium White').pigment, amount: 8 },
+    ])
+    const uHue = srgbHueChroma(undertone)
+    assert.ok(uHue.h > 260 || uHue.h < 40, `undertone hue ${uHue.h} should lean magenta, not green`)
+    assert.ok(luma(undertone) > luma(mixed) + 0.2)
+  })
+
+  it('two blues mix differently with yellow (cerulean greener than ultramarine)', () => {
+    const yellow = mustTube('Hansa Yellow')
+    const ultra = mixTubePaints(mustTube('Ultramarine'), yellow, 1, 1)
+    const ceru = mixTubePaints(mustTube('Cerulean'), yellow, 1, 1)
+    const uH = srgbHueChroma(ultra)
+    const cH = srgbHueChroma(ceru)
+    assert.ok(uH.h > 70 && uH.h < 185, `ultra+yellow hue ${uH.h}`)
+    assert.ok(cH.h > 70 && cH.h < 185, `cerulean+yellow hue ${cH.h}`)
+    assert.ok(ceru[1] > ultra[1], `cerulean should mix a brighter green ${ceru} vs ${ultra}`)
+    assert.ok(cH.c > uH.c, `cerulean mix chroma ${cH.c} vs ultramarine ${uH.c}`)
+  })
+
   it('red + ultramarine goes purple/maroon, darker than a bright magenta lerp', () => {
     const mixed = mixTubePaints(mustTube('Cadmium Red'), mustTube('Ultramarine'), 1, 1)
     assert.ok(mixed[0] > mixed[1])
