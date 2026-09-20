@@ -213,6 +213,7 @@ export class PaintEngine {
     [0, 0, 0, 0],
   ]
   private fingerTint: [number, number, number] = [0.83, 0.22, 0.16]
+  private software = false
   private time = 0
 
   constructor(canvas: HTMLCanvasElement, feel: PaintFeel) {
@@ -224,11 +225,13 @@ export class PaintEngine {
       depth: false,
       stencil: false,
       preserveDrawingBuffer: false,
-      powerPreference: 'high-performance',
     })
     if (!gl) throw new Error('WebGL2 is not available')
     this.gl = gl
     this.fmt = pickFormat(gl)
+    const dbg = gl.getExtension('WEBGL_debug_renderer_info')
+    const renderer = dbg ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)) : ''
+    this.software = /swiftshader|llvmpipe|softpipe|microsoft basic|software/i.test(renderer)
 
     const vao = gl.createVertexArray()
     const buf = gl.createBuffer()
@@ -263,7 +266,7 @@ export class PaintEngine {
   }
 
   resize(): void {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2)
+    const dpr = this.software ? 1 : Math.min(window.devicePixelRatio || 1, 2)
     const w = Math.max(1, Math.floor(this.canvas.clientWidth * dpr))
     const h = Math.max(1, Math.floor(this.canvas.clientHeight * dpr))
     if (this.canvas.width === w && this.canvas.height === h) return
@@ -293,9 +296,10 @@ export class PaintEngine {
     this.deleteFbo(this.divergenceFbo)
     this.deleteFbo(this.curlFbo)
     this.deleteDouble(this.pressure)
-    const coarse = window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 720
-    const sim = getResolution(this.canvas.width, this.canvas.height, coarse ? 192 : 320)
-    const dye = getResolution(this.canvas.width, this.canvas.height, coarse ? 448 : 720)
+    const coarse =
+      this.software || window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 720
+    const sim = getResolution(this.canvas.width, this.canvas.height, this.software ? 96 : coarse ? 192 : 320)
+    const dye = getResolution(this.canvas.width, this.canvas.height, this.software ? 192 : coarse ? 448 : 720)
     const velFilter = this.fmt.filter
     this.velocity = createDouble(gl, sim.w, sim.h, this.fmt, velFilter)
     this.dye = createDouble(gl, dye.w, dye.h, this.fmt, this.fmt.filter)
@@ -428,7 +432,7 @@ export class PaintEngine {
       this.velocity.swap()
     }
 
-    const viscIters = Math.max(1, feel.viscosityIters)
+    const viscIters = this.software ? Math.min(2, Math.max(1, feel.viscosityIters)) : Math.max(1, feel.viscosityIters)
     gl.useProgram(this.viscosityProg.id)
     gl.uniform1i(this.viscosityProg.uniforms.uVelocity, 0)
     gl.uniform2f(this.viscosityProg.uniforms.uTexelSize, texel[0], texel[1])
@@ -471,7 +475,7 @@ export class PaintEngine {
     gl.uniform2f(this.pressureProg.uniforms.uTexelSize, texel[0], texel[1])
     gl.activeTexture(gl.TEXTURE1)
     gl.bindTexture(gl.TEXTURE_2D, this.divergenceFbo.tex)
-    const iters = Math.max(8, feel.pressureIters)
+    const iters = this.software ? 8 : Math.max(8, feel.pressureIters)
     for (let i = 0; i < iters; i++) {
       gl.activeTexture(gl.TEXTURE0)
       gl.bindTexture(gl.TEXTURE_2D, this.pressure.read.tex)

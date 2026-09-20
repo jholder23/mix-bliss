@@ -22,9 +22,14 @@ const soundBtn = must(document.querySelector<HTMLButtonElement>('#sound'), 'soun
 let engine: PaintEngine
 try {
   engine = new PaintEngine(canvas, feelFromViscosity(0.72))
-} catch {
+} catch (err) {
   fail.hidden = false
-  throw new Error('WebGL2 unavailable')
+  const detail = err instanceof Error ? err.message : 'WebGL2 unavailable'
+  fail.replaceChildren()
+  const p = document.createElement('p')
+  p.textContent = detail
+  fail.append(p)
+  throw err
 }
 
 const audio = new MixAudio()
