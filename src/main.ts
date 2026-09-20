@@ -334,7 +334,11 @@ scene.onBeforeRenderObservable.add(() => {
   }
 })
 
-engine.runRenderLoop(() => scene.render())
+let framesDrawn = 0
+engine.runRenderLoop(() => {
+  framesDrawn++
+  scene.render()
+})
 
 renderSwatches()
 renderShots()
@@ -367,6 +371,7 @@ window.__impasto = {
   getDishScreen: () => dishScreen(),
   sampleFrame,
   waitFrames,
+  getFrameCount: () => framesDrawn,
   mix(a, b, amountA = 1, amountB = 1) {
     const rgb = mixTubePaints(resolveTube(a), resolveTube(b), amountA, amountB)
     const hc = srgbHueChroma(rgb)
@@ -393,6 +398,24 @@ window.__impasto = {
   liveCount() {
     return fluid.liveCount()
   },
+  pause() {
+    engine.stopRenderLoop()
+  },
+  resume() {
+    engine.runRenderLoop(() => {
+      framesDrawn++
+      scene.render()
+    })
+  },
+}
+
+if (new URLSearchParams(location.search).has('demo')) {
+  window.__impasto.glop('Cadmium Red', -0.45, 0.12, 0.64)
+  window.__impasto.glop('Hansa Yellow', 0.42, 0.1, 0.56)
+  window.__impasto.glop('Ultramarine', 0.08, -0.48, 0.5)
+  window.__impasto.glop('Titanium White', -0.58, -0.4, 0.4)
+  window.__impasto.glop('Phthalo Green', 0.65, -0.3, 0.38)
+  window.__impasto.step(16)
 }
 
 const fontLink = document.createElement('link')

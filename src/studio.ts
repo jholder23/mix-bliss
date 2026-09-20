@@ -36,13 +36,13 @@ export type CameraShot = {
 
 /** Macro 3/4 is the default YouTube paint-mix angle: close, slightly above, dish filling the frame. */
 export const SHOTS: CameraShot[] = [
-  { id: 'three', label: '3/4', alpha: -0.88, beta: 0.78, radius: 4.05 },
-  { id: 'top', label: 'Top', alpha: -0.95, beta: 0.08, radius: 4.55 },
-  { id: 'front', label: 'Front', alpha: -Math.PI / 2, beta: 1.08, radius: 3.95 },
-  { id: 'side', label: 'Side', alpha: 0.05, beta: 1.48, radius: 4.15 },
-  { id: 'low', label: 'Low', alpha: -0.55, beta: 1.36, radius: 3.5 },
-  { id: 'back', label: 'Back', alpha: 2.35, beta: 0.92, radius: 4.2 },
-  { id: 'under', label: 'Under', alpha: -0.85, beta: 2.48, radius: 5.4 },
+  { id: 'three', label: '3/4', alpha: -0.88, beta: 0.92, radius: 5.2 },
+  { id: 'top', label: 'Top', alpha: -0.95, beta: 0.08, radius: 5.7 },
+  { id: 'front', label: 'Front', alpha: -Math.PI / 2, beta: 1.08, radius: 5.05 },
+  { id: 'side', label: 'Side', alpha: 0.05, beta: 1.48, radius: 5.25 },
+  { id: 'low', label: 'Low', alpha: -0.55, beta: 1.36, radius: 4.6 },
+  { id: 'back', label: 'Back', alpha: 2.35, beta: 0.92, radius: 5.3 },
+  { id: 'under', label: 'Under', alpha: -0.85, beta: 2.48, radius: 5.8 },
 ]
 
 /** Softbox sits camera-left and high; light travels toward the tray. */
@@ -82,6 +82,16 @@ function porcelain(scene: Scene, name: string): PBRMaterial {
 }
 
 function attachCinematicLook(scene: Scene, camera: ArcRotateCamera, software: boolean): void {
+  if (software) {
+    const ip = scene.imageProcessingConfiguration
+    ip.toneMappingEnabled = true
+    ip.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES
+    ip.contrast = 1.08
+    ip.exposure = 1.02
+    ip.vignetteEnabled = true
+    ip.vignetteWeight = 1.1
+    return
+  }
   const pipe = new DefaultRenderingPipeline('macroLook', true, scene, [camera])
   pipe.fxaaEnabled = software
   pipe.samples = software ? 1 : 4
@@ -170,7 +180,7 @@ export function createStudio(canvas: HTMLCanvasElement): {
     audioEngine: false,
   })
   const software = detectSoftware(engine)
-  engine.setHardwareScalingLevel(software ? 1 : 0.72)
+  engine.setHardwareScalingLevel(software ? 1.35 : 0.72)
 
   const scene = new Scene(engine)
   scene.clearColor = new Color4(0.38, 0.34, 0.3, 1)
@@ -179,9 +189,9 @@ export function createStudio(canvas: HTMLCanvasElement): {
   scene.imageProcessingConfiguration.toneMappingEnabled = true
   scene.imageProcessingConfiguration.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES
 
-  const start = SHOTS[0] ?? { id: 'three', label: '3/4', alpha: -0.88, beta: 0.78, radius: 4.05 }
-  const camera = new ArcRotateCamera('cam', start.alpha, start.beta, start.radius, new Vector3(0, 0.28, 0), scene)
-  camera.fov = 0.52
+  const start = SHOTS[0] ?? { id: 'three', label: '3/4', alpha: -0.88, beta: 0.92, radius: 5.2 }
+  const camera = new ArcRotateCamera('cam', start.alpha, start.beta, start.radius, new Vector3(0, 0.26, 0), scene)
+  camera.fov = 0.56
   camera.fovMode = Camera.FOVMODE_VERTICAL_FIXED
   camera.lowerRadiusLimit = 1.7
   camera.upperRadiusLimit = 14
@@ -313,11 +323,15 @@ export function createStudio(canvas: HTMLCanvasElement): {
   windowPane.material = winMat
   windowPane.isPickable = false
 
-  const probe = new ReflectionProbe('studioProbe', software ? 64 : 128, scene, false)
-  probe.refreshRate = software ? 90 : 24
-  probe.renderList = [wall, cyc, softbox, windowPane, table, dishBody, rim, pit]
-  scene.environmentTexture = probe.cubeTexture
-  scene.environmentIntensity = 0.88
+  if (software) {
+    scene.environmentIntensity = 0.55
+  } else {
+    const probe = new ReflectionProbe('studioProbe', 128, scene, false)
+    probe.refreshRate = 24
+    probe.renderList = [wall, cyc, softbox, windowPane, table, dishBody, rim, pit]
+    scene.environmentTexture = probe.cubeTexture
+    scene.environmentIntensity = 0.88
+  }
 
   let shadows: ShadowGenerator | null = null
   if (!software) {

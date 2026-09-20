@@ -14,6 +14,7 @@ export type ImpastoDebug = {
   getDishScreen: () => { x: number; y: number }
   sampleFrame: () => Promise<{ mean: [number, number, number]; variance: number; px: number }>
   waitFrames: (n: number) => Promise<void>
+  getFrameCount: () => number
   mix: (
     a: string,
     b: string,
@@ -27,6 +28,8 @@ export type ImpastoDebug = {
   step: (frames?: number) => void
   sample: (x: number, z: number) => { r: number; g: number; b: number; a: number }
   liveCount: () => number
+  pause: () => void
+  resume: () => void
 }
 
 declare global {
