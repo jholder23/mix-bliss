@@ -69,8 +69,8 @@ function sizeName(t: number): string {
 }
 
 function toolRadius(): number {
-  if (tool === 'stick') return feel.fingerRadius * 0.42 * (0.55 + size)
-  if (tool === 'knife') return feel.fingerRadius * 2.35 * (0.65 + size * 0.85)
+  if (tool === 'stick') return feel.fingerRadius * 0.4 * (0.55 + size)
+  if (tool === 'knife') return feel.fingerRadius * 1.15 * (0.7 + size * 0.55)
   if (tool === 'glop') return feel.dyeRadius * (0.4 + size * 0.9)
   return feel.fingerRadius * (0.7 + size * 0.7)
 }
@@ -88,9 +88,9 @@ function glopAt(uv: [number, number], strength: number): void {
 
 function mixAt(uv: [number, number], delta: [number, number], steps: number): void {
   const radius = toolRadius()
-  const depthScale = tool === 'knife' ? 0.95 : tool === 'stick' ? 0.22 : 0.38
-  const pushScale = tool === 'knife' ? 0.42 : tool === 'stick' ? 1.45 : 0.95
-  const dragScale = tool === 'knife' ? 2.1 : 1
+  const depthScale = tool === 'knife' ? 0.72 : tool === 'stick' ? 0.22 : 0.38
+  const pushScale = tool === 'knife' ? 0.22 : tool === 'stick' ? 1.15 : 0.85
+  const dragScale = tool === 'knife' ? 0.95 : 0.85
   const depth = (feel.fingerDepth * depthScale) / steps
   const push = (feel.fingerPush * pushScale) / steps
   const drag = feel.splatForce * dragScale
@@ -273,16 +273,6 @@ window.addEventListener('resize', () => engine.resize())
 function frame(now: number): void {
   const dt = Math.min(0.033, (now - lastFrame) / 1000)
   lastFrame = now
-  if (tool === 'glop') {
-    for (const stroke of strokes.values()) {
-      if (!stroke.prev) continue
-      if (stroke.moved > 0.012) continue
-      if (now - stroke.lastGlop > 110) {
-        glopAt(stroke.prev, 0.22 + size * 0.18)
-        stroke.lastGlop = now
-      }
-    }
-  }
   const fingers: { uv: [number, number]; radius: number }[] = []
   let overlayKind = 0
   let overlayUv: [number, number] = [0, 0]

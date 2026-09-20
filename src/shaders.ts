@@ -401,7 +401,7 @@ vec3 studioEnv(vec3 dir) {
   float softbox = pow(max(dot(d, normalize(vec3(-0.28, 0.62, 0.72))), 0.0), 18.0);
   col += vec3(1.35, 1.24, 1.08) * softbox * 4.2;
   float window = pow(max(dot(d, normalize(vec3(0.55, 0.15, 0.55))), 0.0), 42.0);
-  col += vec3(0.75, 0.88, 1.15) * window * 2.4;
+  col += vec3(0.95, 0.93, 0.9) * window * 1.4;
   float ground = pow(max(-d.z, 0.0), 2.0);
   col += vec3(0.28, 0.18, 0.1) * ground * 0.35;
   return col;
@@ -580,7 +580,7 @@ void main() {
   if (hit < 0.5) hit = fingerHit(uFinger2, vUv, fn, wet);
 
   if (hit > 0.5) {
-    vec3 fcol = shadeFinger(fn, V, key, mix(uFingerTint, dye.rgb, cover * 0.6), wet);
+    vec3 fcol = shadeFinger(fn, V, key, dye.rgb, wet);
     float edge = pow(clamp(fn.z, 0.0, 1.0), 0.35);
     painted = mix(painted * 0.18, fcol, edge);
     painted += pow(clamp(fn.z, 0.0, 1.0), 16.0) * vec3(1.0, 0.95, 0.9) * 0.28;
