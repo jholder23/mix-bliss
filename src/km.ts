@@ -377,9 +377,7 @@ function zeros(n: number): Float32Array {
 function solveLinear(A: Float32Array, b: Float32Array, n: number): Float32Array {
   const M = new Float64Array(n * n)
   const x = new Float64Array(n)
-  const p = new Int32Array(n)
   for (let i = 0; i < n; i++) {
-    p[i] = i
     x[i] = b[i] ?? 0
     for (let j = 0; j < n; j++) M[i * n + j] = A[i * n + j] ?? 0
   }

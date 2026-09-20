@@ -24,6 +24,12 @@ WebGL2 is required. Software renderers (SwiftShader included) still get the 3D c
 
 ## Tests
 
+Unit tests cover Kubelka–Munk mixing (fast, no browser):
+
+```bash
+npm run test:unit
+```
+
 Playwright looks at the running 3D mixer: the WebGL canvas, camera chips, glop color, and mix tools. Headless Chromium is enough — no screen recordings.
 
 ```bash
@@ -50,6 +56,8 @@ The suite reuses Vite on **port 43147** if it is already running; otherwise it s
 - **Scrape** — wipe the tray.
 
 The fluid is a 3D particle pile colliding in the bowl. Each frame it is splatted into a height field so the surface reads as one wet body instead of a handful of grapes.
+
+Overlapping paint does **not** lerp RGB. Each tube stores Kubelka–Munk absorption **K(λ)** and scattering **S(λ)**. Concentration is paint mass (particle volume, then mound height on the dish). Mix tools only fold those coefficients. Ultramarine + hansa yellow goes green, cadmium red + yellow goes orange, and complements collapse toward brown/olive instead of a bright digital average. A single-tube glop still matches its swatch.
 
 ## Lighting
 

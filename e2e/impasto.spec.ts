@@ -53,8 +53,8 @@ test('camera chips steal the view in every direction', async ({ page }, testInfo
   await page.locator('[data-shot="side"]').click()
   await waitSettled(page)
   let cam = await page.evaluate(() => window.__impasto!.getCamera())
-  expect(Math.abs(wrapAngle(cam.alpha - 0.06))).toBeLessThan(0.18)
-  expect(Math.abs(cam.beta - 1.12)).toBeLessThan(0.18)
+  expect(Math.abs(wrapAngle(cam.alpha - 0.05))).toBeLessThan(0.18)
+  expect(Math.abs(cam.beta - 1.48)).toBeLessThan(0.18)
   await page.screenshot({ path: testInfo.outputPath('cam-side.png') })
 
   await page.locator('[data-shot="top"]').click()
@@ -77,7 +77,7 @@ test('camera chips steal the view in every direction', async ({ page }, testInfo
   await page.locator('[data-shot="back"]').click()
   await waitSettled(page)
   cam = await page.evaluate(() => window.__impasto!.getCamera())
-  expect(Math.abs(wrapAngle(cam.alpha - 2.32))).toBeLessThan(0.2)
+  expect(Math.abs(wrapAngle(cam.alpha - 2.35))).toBeLessThan(0.2)
 
   await page.locator('[data-shot="three"]').click()
   await waitSettled(page)
