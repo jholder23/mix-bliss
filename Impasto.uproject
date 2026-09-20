@@ -1,0 +1,27 @@
+{
+	"FileVersion": 3,
+	"EngineAssociation": "5.8",
+	"Category": "Simulation",
+	"Description": "Photoreal top-down oil on a porcelain tray. Palette knife only. No color mixing.",
+	"Modules": [
+		{
+			"Name": "Impasto",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "ImpastoEditor",
+			"Type": "Editor",
+			"LoadingPhase": "PostEngineInit"
+		}
+	],
+	"Plugins": [
+		{ "Name": "Niagara", "Enabled": true },
+		{ "Name": "NiagaraFluids", "Enabled": true },
+		{ "Name": "ProceduralMeshComponent", "Enabled": true },
+		{ "Name": "EnhancedInput", "Enabled": true },
+		{ "Name": "PixelStreaming", "Enabled": true },
+		{ "Name": "PixelStreaming2", "Enabled": true },
+		{ "Name": "GeometryProcessing", "Enabled": true }
+	]
+}

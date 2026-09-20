@@ -1,30 +1,41 @@
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-
-node_modules
-dist
-dist-ssr
-*.local
-
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
+# Unreal Engine
+Binaries/
+Build/
+DerivedDataCache/
+Intermediate/
+Saved/
+FileOpenOrder/
+.vs/
+.vscode/
+*.VC.db
+*.opensdf
+*.opendb
+*.sdf
 *.sln
-*.sw?
+*.suo
+*.xcodeproj
+*.xcworkspace
+*.code-workspace
+CompileCommands.json
+.idea/
 
-# Playwright
+*_BuiltData.uasset
+*.log
+
+# Do not resurrect the rejected WebGL prototype
+node_modules/
+dist/
+src/
+index.html
+package.json
+package-lock.json
+vite.config.ts
+tsconfig.json
+public/
+tests/
 test-results/
 playwright-report/
-blob-report/
 playwright/.cache/
+
+.DS_Store
+Thumbs.db
