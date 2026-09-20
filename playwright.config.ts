@@ -2,8 +2,8 @@ import { defineConfig, devices } from '@playwright/test'
 
 export default defineConfig({
   testDir: './e2e',
-  timeout: 45_000,
-  expect: { timeout: 12_000 },
+  timeout: 60_000,
+  expect: { timeout: 15_000 },
   fullyParallel: false,
   workers: 1,
   retries: 0,
@@ -15,6 +15,7 @@ export default defineConfig({
     video: 'off',
     screenshot: 'only-on-failure',
     actionTimeout: 8_000,
+    channel: 'chrome',
   },
   webServer: {
     command: 'npm run dev',

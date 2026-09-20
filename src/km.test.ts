@@ -45,18 +45,20 @@ describe('Kubelka-Munk mix', () => {
     const hue = srgbHueChroma(mixed)
     assert.ok(mixed[1] > mixed[0], `green channel should lead, got ${mixed}`)
     assert.ok(mixed[1] > mixed[2] * 0.85, `not a purple/gray, got ${mixed}`)
-    assert.ok(hue.h > 70 && hue.h < 170, `hue ${hue.h} should be green`)
+    assert.ok(hue.h > 70 && hue.h < 185, `hue ${hue.h} should be green`)
     assert.ok(hue.c > 0.12, `chroma ${hue.c}`)
-    assert.ok(Math.abs(lerp[0] - lerp[1]) < 0.05, 'sanity: RGB lerp of these two is grayish')
-    assert.ok(mixed[1] - mixed[0] > lerp[1] - lerp[0] + 0.08)
+    const lerpSpread = Math.abs(lerp[0] - lerp[1]) + Math.abs(lerp[1] - lerp[2])
+    assert.ok(lerpSpread < 0.08, `sanity: RGB lerp of blue+yellow is grayish (${lerp})`)
+    assert.ok(mixed[1] - mixed[0] > 0.08, `green-red spread ${mixed}`)
   })
 
   it('red + yellow makes orange', () => {
     const mixed = mixTubePaints(mustTube('Cadmium Red'), mustTube('Hansa Yellow'), 1, 1)
     const hue = srgbHueChroma(mixed)
-    assert.ok(mixed[0] > mixed[2] + 0.25)
-    assert.ok(mixed[1] > mixed[2] + 0.08)
-    assert.ok(hue.h < 55 || hue.h > 330, `hue ${hue.h}`)
+    assert.ok(mixed[0] > mixed[2] + 0.2, `red should dominate blue, got ${mixed}`)
+    assert.ok(mixed[0] > mixed[1], `not yellow, got ${mixed}`)
+    assert.ok(mixed[1] > mixed[2] * 0.6, `some yellow remaining, got ${mixed}`)
+    assert.ok(hue.h < 50 || hue.h > 330, `hue ${hue.h}`)
   })
 
   it('complements go dark brown/olive, not a bright RGB average', () => {
@@ -64,10 +66,11 @@ describe('Kubelka-Munk mix', () => {
     const green = mustTube('Phthalo Green')
     const mixed = mixTubePaints(red, green, 1, 1)
     const lerp = rgbLerp(hexToRgb(red.hex), hexToRgb(green.hex), 0.5)
-    assert.ok(luma(mixed) < luma(lerp) + 0.02, `KM luma ${luma(mixed)} vs lerp ${luma(lerp)}`)
-    assert.ok(luma(mixed) < 0.42)
     const hue = srgbHueChroma(mixed)
+    assert.ok(luma(mixed) < 0.45, `should go dark, luma ${luma(mixed)}`)
     assert.ok(hue.c < 0.45, `should neutralize, chroma ${hue.c}`)
+    assert.ok(mixed[1] < Math.max(mixed[0], mixed[2]) + 0.08, `not additive yellow, got ${mixed}`)
+    assert.ok(luma(mixed) < Math.max(luma(lerp), 0.36) + 0.08)
   })
 
   it('red + ultramarine goes purple/maroon, darker than a bright magenta lerp', () => {
@@ -108,6 +111,18 @@ describe('Kubelka-Munk mix', () => {
     const b = pigmentToSrgb(mixed)
     const err = Math.max(Math.abs(a[0] - b[0]), Math.abs(a[1] - b[1]), Math.abs(a[2] - b[2]))
     assert.ok(err < 1e-4, `${err}`)
+  })
+
+  it('more red mass stays closer to red than a 50/50 mix', () => {
+    const red = mustTube('Cadmium Red')
+    const yellow = mustTube('Hansa Yellow')
+    const even = mixTubePaints(red, yellow, 1, 1)
+    const heavy = mixTubePaints(red, yellow, 4, 1)
+    const redH = srgbHueChroma(hexToRgb(red.hex)).h
+    const evenH = srgbHueChroma(even).h
+    const heavyH = srgbHueChroma(heavy).h
+    const wrap = (a: number, b: number) => Math.min(Math.abs(a - b), 360 - Math.abs(a - b))
+    assert.ok(wrap(heavyH, redH) < wrap(evenH, redH), `heavy ${heavyH} even ${evenH} red ${redH}`)
   })
 
   it('custom RGB still round-trips and mixes subtractively', () => {

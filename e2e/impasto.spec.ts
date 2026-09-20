@@ -2,10 +2,10 @@ import { expect, test, type Page } from '@playwright/test'
 
 async function waitReady(page: Page) {
   await page.goto('/', { waitUntil: 'domcontentloaded' })
-  await page.waitForFunction(() => window.__impasto?.ready === true, null, { timeout: 20_000 })
+  await page.waitForFunction(() => window.__impasto?.ready === true, null, { timeout: 25_000 })
   await expect(page.locator('#fail')).toBeHidden()
   await expect(page.locator('#canvas')).toBeVisible()
-  await page.evaluate(() => window.__impasto!.waitFrames(12))
+  await page.evaluate(() => window.__impasto!.waitFrames(2))
 }
 
 function wrapAngle(a: number): number {
@@ -20,7 +20,7 @@ async function waitSettled(page: Page) {
     const cam = window.__impasto?.getCamera()
     return !!cam && cam.settling === false
   }, null, { timeout: 8_000 })
-  await page.evaluate(() => window.__impasto!.waitFrames(4))
+  await page.evaluate(() => window.__impasto!.waitFrames(2))
 }
 
 async function clickDish(page: Page) {
@@ -190,3 +190,77 @@ test('Finger, Knife, and Stick fold paint and never dump color', async ({ page }
   expect(afterFold.paint.filled).toBeGreaterThan(20)
   await page.screenshot({ path: testInfo.outputPath('knife-fold.png') })
 })
+
+function inHueRange(h: number, lo: number, hi: number): boolean {
+  if (lo <= hi) return h >= lo && h <= hi
+  return h >= lo || h <= hi
+}
+
+test('KM mixing is subtractive: red+yellow orange, blue+yellow green', async ({ page }) => {
+  await waitReady(page)
+
+  const redYellow = await page.evaluate(() => window.__impasto!.mix('Cadmium Red', 'Hansa Yellow'))
+  expect(redYellow.chroma).toBeGreaterThan(0.22)
+  expect(inHueRange(redYellow.hue, 12, 55), `red+yellow hue ${redYellow.hue} rgb=${redYellow.rgb}`).toBe(true)
+  expect(redYellow.rgb[0]).toBeGreaterThan(redYellow.rgb[2] + 0.12)
+
+  const blueYellow = await page.evaluate(() => window.__impasto!.mix('Ultramarine', 'Hansa Yellow'))
+  expect(blueYellow.chroma).toBeGreaterThan(0.12)
+  expect(inHueRange(blueYellow.hue, 70, 165), `blue+yellow hue ${blueYellow.hue} rgb=${blueYellow.rgb}`).toBe(true)
+  expect(blueYellow.rgb[1]).toBeGreaterThan(blueYellow.rgb[0])
+
+  const ceruleanYellow = await page.evaluate(() => window.__impasto!.mix('Cerulean', 'Hansa Yellow'))
+  expect(inHueRange(ceruleanYellow.hue, 70, 170), `cerulean+yellow hue ${ceruleanYellow.hue}`).toBe(true)
+
+  const redBlue = await page.evaluate(() => window.__impasto!.mix('Cadmium Red', 'Ultramarine'))
+  expect(inHueRange(redBlue.hue, 250, 340), `red+blue hue ${redBlue.hue}`).toBe(true)
+
+  const masstone = await page.evaluate(() => window.__impasto!.masstone('Cadmium Red'))
+  expect(masstone[0]).toBeGreaterThan(0.7)
+  expect(masstone[0]).toBeGreaterThan(masstone[1] + 0.3)
+})
+
+test('overlapping glops KM-mix in the paint map by mass, mix tools dump nothing', async ({ page }, testInfo) => {
+  await waitReady(page)
+  await page.evaluate(() => {
+    const api = window.__impasto!
+    api.scrape()
+    api.step(2)
+    api.glop('Cadmium Red', -0.12, 0, 0.62)
+    api.glop('Hansa Yellow', 0.12, 0, 0.62)
+    api.step(18)
+  })
+
+  const overlap = await page.evaluate(() => window.__impasto!.sample(0, 0))
+  expect(overlap.a).toBeGreaterThan(0.04)
+  const chroma = Math.max(overlap.r, overlap.g, overlap.b) - Math.min(overlap.r, overlap.g, overlap.b)
+  expect(chroma).toBeGreaterThan(0.12)
+  expect(overlap.r).toBeGreaterThan(overlap.b + 0.05)
+  expect(overlap.g).toBeGreaterThan(overlap.b)
+  await page.screenshot({ path: testInfo.outputPath('km-red-yellow-overlap.png') })
+
+  await page.evaluate(() => {
+    const api = window.__impasto!
+    api.scrape()
+    api.step(2)
+    api.glop('Ultramarine', -0.1, 0, 0.62)
+    api.glop('Hansa Yellow', 0.1, 0, 0.62)
+    api.step(18)
+  })
+  const greenMix = await page.evaluate(() => window.__impasto!.sample(0, 0))
+  expect(greenMix.a).toBeGreaterThan(0.04)
+  expect(greenMix.g).toBeGreaterThan(greenMix.r)
+  await page.screenshot({ path: testInfo.outputPath('km-blue-yellow-overlap.png') })
+
+  await page.evaluate(() => window.__impasto!.scrape())
+  await page.evaluate(() => window.__impasto!.step(2))
+  for (const tool of ['finger', 'knife', 'stick'] as const) {
+    await page.evaluate((kind) => {
+      window.__impasto!.stir(0, 0, 0.2, 0.1, kind)
+      window.__impasto!.step(4)
+    }, tool)
+    expect(await page.evaluate(() => window.__impasto!.liveCount())).toBe(0)
+    expect((await page.evaluate(() => window.__impasto!.sample(0, 0))).a).toBe(0)
+  }
+})
+

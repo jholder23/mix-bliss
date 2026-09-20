@@ -163,6 +163,21 @@ export function mixPigments(parts: readonly { pigment: Pigment; amount: number }
     out.K[i] *= inv
     out.S[i] *= inv
   }
+  // Swatch residual is a display correction for one tube. Fade it once K/S
+  // spectra actually differ so mixes stay subtractive (blue+yellow → green).
+  let diverge = 0
+  for (const part of parts) {
+    if (part.amount <= 0) continue
+    for (let i = 0; i < BANDS; i++) {
+      const k0 = out.K[i] ?? 0
+      const k1 = part.pigment.K[i] ?? 0
+      diverge += Math.abs(k1 - k0) / (Math.abs(k0) + 0.08)
+    }
+  }
+  const fade = 1 - clamp(diverge / (BANDS * 1.35), 0, 1)
+  out.residual[0] *= fade
+  out.residual[1] *= fade
+  out.residual[2] *= fade
   return out
 }
 
@@ -212,6 +227,12 @@ export function mixKSSlots(
     const mean = (ma * va + mb * vb) * inv
     resid[ra + c] = va + (mean - va) * blendT
     resid[rb + c] = vb + (mean - vb) * blendT
+  }
+  const kDiff = Math.abs((k[oa] ?? 0) - (k[ob] ?? 0)) + Math.abs((k[oa + 3] ?? 0) - (k[ob + 3] ?? 0))
+  const fade = clamp(1 - kDiff * 0.15 * blendT, 0, 1)
+  for (let c = 0; c < 3; c++) {
+    resid[ra + c] = (resid[ra + c] ?? 0) * fade
+    resid[rb + c] = (resid[rb + c] ?? 0) * fade
   }
 }
 

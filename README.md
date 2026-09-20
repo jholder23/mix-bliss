@@ -47,7 +47,7 @@ The suite reuses Vite on **port 43147** if it is already running; otherwise it s
 ## How to mix
 
 - **Glop** — tap the dish to dump a 3D mound of the selected tube color. Drag to lay spaced beads. Holding still does not keep pumping.
-- **Finger / Knife / Stick** — fold existing paint only. They never dump color.
+- **Finger / Knife / Stick** — fold existing paint only. They never dump color. Folded pigments mix with Kubelka–Munk two-constant theory (absorption K and scattering S, weighted by overlapping paint mass), so red+yellow goes orange/ochre and blue+yellow goes green, not a muddy RGB average.
 - **Look** — left-drag to tumble the camera in any direction.
 - **Right-drag or middle-drag** always orbits, even while a mix tool is selected.
 - **Scroll** (or pinch) to zoom. Arrow keys also orbit.
@@ -55,7 +55,7 @@ The suite reuses Vite on **port 43147** if it is already running; otherwise it s
 - **Viscosity** — water through honey to tar. Heavier paint sits up; thinner paint slumps and mixes faster.
 - **Scrape** — wipe the tray.
 
-The fluid is a 3D particle pile colliding in the bowl. Each frame it is splatted into a height field so the surface reads as one wet body instead of a handful of grapes.
+The fluid is a 3D particle pile colliding in the bowl. Each frame it is splatted into a height field so the surface reads as one wet body instead of a handful of grapes. Overlapping columns mix in spectral KM space from actual paint height, then convert to display sRGB.
 
 Overlapping paint does **not** lerp RGB. Each tube stores Kubelka–Munk absorption **K(λ)** and scattering **S(λ)**. Concentration is paint mass (particle volume, then mound height on the dish). Mix tools only fold those coefficients. Ultramarine + hansa yellow goes green, cadmium red + yellow goes orange, and complements collapse toward brown/olive instead of a bright digital average. A single-tube glop still matches its swatch.
 
