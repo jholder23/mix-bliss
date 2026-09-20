@@ -410,12 +410,12 @@ window.__impasto = {
 }
 
 if (new URLSearchParams(location.search).has('demo')) {
-  window.__impasto.glop('Cadmium Red', -0.45, 0.12, 0.64)
-  window.__impasto.glop('Hansa Yellow', 0.42, 0.1, 0.56)
-  window.__impasto.glop('Ultramarine', 0.08, -0.48, 0.5)
-  window.__impasto.glop('Titanium White', -0.58, -0.4, 0.4)
-  window.__impasto.glop('Phthalo Green', 0.65, -0.3, 0.38)
-  window.__impasto.step(16)
+  window.__impasto.glop('Cadmium Red', -0.95, 0.55, 0.48)
+  window.__impasto.glop('Hansa Yellow', 0.9, 0.5, 0.44)
+  window.__impasto.glop('Ultramarine', 0.15, -1.05, 0.42)
+  window.__impasto.glop('Titanium White', -0.85, -0.85, 0.36)
+  window.__impasto.glop('Phthalo Green', 1.05, -0.55, 0.38)
+  window.__impasto.step(6)
 }
 
 const fontLink = document.createElement('link')

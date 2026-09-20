@@ -204,10 +204,15 @@ void main() {
   vec3 coat = vec3(coatD * coatG / max(4.0 * ndv * max(ndl, 0.08), 1e-4));
   coat *= Fschlick(hdv, vec3(0.05)) * vec3(1.06, 1.03, 0.99);
 
-  vec3 col = diffuse * (1.0 - Fs) * (1.0 - coatF);
-  col += trans * (1.0 - coatF) * 0.9;
-  col += spec * keyCol * (0.5 + 0.95 * gloss) * thick * (1.0 - coatF);
-  col += coat * keyCol * (0.35 + 1.15 * gloss) * mix(0.35, 1.0, ndl);
+  vec3 specLit = spec * keyCol * (0.22 + 0.4 * gloss) * thick * (1.0 - coatF);
+  specLit = min(specLit, vec3(2.2));
+  vec3 coatLit = min(coat, vec3(6.0)) * keyCol * (0.12 + 0.38 * gloss) * mix(0.35, 1.0, ndl);
+  coatLit = min(coatLit, vec3(2.8));
+
+  vec3 col = diffuse * (1.0 - Fs) * (1.0 - coatF * 0.65);
+  col += trans * (1.0 - coatF * 0.65) * 0.85;
+  col += specLit;
+  col += coatLit;
 
   float fillN = clamp(dot(N, normalize(-fillDir)) * 0.5 + 0.42, 0.0, 1.0);
   col += pigment * fillN * fillCol * 0.3 * (1.0 - coatF);
@@ -226,6 +231,7 @@ void main() {
   col += pigment * side * 0.14;
   col += studioEnv(N) * pigment * 0.09;
   col += floorCol * pigment * pow(max(-N.y, 0.0), 1.6) * 0.06;
+  col = max(col, pigment * wrap * keyCol * 0.62);
 
   col += (hash(gl_FragCoord.xy) - 0.5) * 0.003;
   gl_FragColor = vec4(max(col, 0.0), 1.0);

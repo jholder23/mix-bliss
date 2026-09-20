@@ -112,8 +112,8 @@ function attachCinematicLook(scene: Scene, camera: ArcRotateCamera, software: bo
   if (ip) {
     ip.toneMappingEnabled = true
     ip.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES
-    ip.contrast = 1.14
-    ip.exposure = 1.02
+    ip.contrast = 1.16
+    ip.exposure = 0.94
     ip.ditheringEnabled = true
     ip.vignetteEnabled = true
     ip.vignetteWeight = 1.35
@@ -121,11 +121,12 @@ function attachCinematicLook(scene: Scene, camera: ArcRotateCamera, software: bo
     ip.vignetteColor = new Color4(0.07, 0.05, 0.04, 0)
     ip.vignetteCameraFov = camera.fov
     const curves = new ColorCurves()
-    curves.globalSaturation = 8
-    curves.midtonesSaturation = 6
-    curves.highlightsSaturation = -8
+    curves.globalSaturation = 6
+    curves.midtonesSaturation = 5
+    curves.highlightsSaturation = -10
+    curves.highlightsExposure = -14
     curves.shadowsSaturation = 4
-    curves.globalExposure = 2
+    curves.globalExposure = 0
     ip.colorCurves = curves
     ip.colorCurvesEnabled = true
   }

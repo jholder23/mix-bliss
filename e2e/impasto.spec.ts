@@ -12,9 +12,7 @@ async function waitReady(page: Page) {
 }
 
 async function snap(page: Page, testInfo: TestInfo, name: string) {
-  await page.evaluate(() => window.__impasto?.pause())
-  await page.screenshot({ path: testInfo.outputPath(name), timeout: 12_000 })
-  await page.evaluate(() => window.__impasto?.resume())
+  await page.screenshot({ path: testInfo.outputPath(name), timeout: 8_000 })
 }
 
 function wrapAngle(a: number): number {
@@ -33,7 +31,7 @@ async function waitSettled(page: Page) {
 }
 
 async function tap(page: Page, selector: string) {
-  await page.locator(selector).click({ force: true })
+  await page.locator(selector).click({ force: true, noWaitAfter: true })
 }
 
 async function clickDish(page: Page) {
