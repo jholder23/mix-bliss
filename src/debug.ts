@@ -30,6 +30,10 @@ export type ImpastoDebug = {
   liveCount: () => number
   pause: () => void
   resume: () => void
+  lookShot: (id: string) => void
+  setToolName: (name: string) => void
+  getOrbitButtons: () => number[]
+  nudgeOrbit: (dx: number, dy: number) => void
 }
 
 declare global {

@@ -47,7 +47,7 @@ try {
   throw err
 }
 
-const { engine, scene, camera, software, lookTo, isSettling, setToolGhost, setLeftOrbit, addShadowCaster } = studio
+const { engine, scene, camera, software, lookTo, isSettling, setToolGhost, setLeftOrbit, addShadowCaster, getOrbitButtons, nudgeOrbit } = studio
 const audio = new MixAudio()
 let viscosity = 0.72
 let feel = simFromViscosity(viscosity)
@@ -407,6 +407,17 @@ window.__impasto = {
       scene.render()
     })
   },
+  lookShot(id: string) {
+    const shot = SHOTS.find((item) => item.id === id)
+    if (!shot) throw new Error(`Unknown shot ${id}`)
+    lookTo(shot)
+    markShot(id)
+  },
+  setToolName(name: string) {
+    setTool(name as Tool)
+  },
+  getOrbitButtons: () => getOrbitButtons(),
+  nudgeOrbit: (dx: number, dy: number) => nudgeOrbit(dx, dy),
 }
 
 if (new URLSearchParams(location.search).has('demo')) {
@@ -417,9 +428,3 @@ if (new URLSearchParams(location.search).has('demo')) {
   window.__impasto.glop('Phthalo Green', 1.05, -0.55, 0.38)
   window.__impasto.step(6)
 }
-
-const fontLink = document.createElement('link')
-fontLink.rel = 'stylesheet'
-fontLink.href =
-  'https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,650&family=Outfit:wght@400;500;600&display=swap'
-document.head.append(fontLink)

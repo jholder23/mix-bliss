@@ -170,6 +170,8 @@ export function createStudio(canvas: HTMLCanvasElement): {
   isSettling: () => boolean
   setToolGhost: (kind: number, pos: Vector3 | null, dir: Vector3) => void
   setLeftOrbit: (on: boolean) => void
+  getOrbitButtons: () => number[]
+  nudgeOrbit: (dx: number, dy: number) => void
   addShadowCaster: (mesh: Mesh) => void
 } {
   const engine = new Engine(canvas, true, {
@@ -429,11 +431,10 @@ export function createStudio(canvas: HTMLCanvasElement): {
       camera.inertialAlphaOffset = 0
       camera.inertialBetaOffset = 0
       camera.inertialRadiusOffset = 0
-      const wantA = shortestAngle(camera.alpha, shot.alpha)
-      camera.alpha += (wantA - camera.alpha) * 0.55
-      camera.beta += (shot.beta - camera.beta) * 0.55
-      camera.radius += (shot.radius - camera.radius) * 0.55
-      goal = shot
+      camera.alpha = shortestAngle(camera.alpha, shot.alpha)
+      camera.beta = shot.beta
+      camera.radius = shot.radius
+      goal = null
     },
     isSettling() {
       return goal !== null
@@ -462,6 +463,13 @@ export function createStudio(canvas: HTMLCanvasElement): {
     },
     setLeftOrbit(on) {
       applyOrbitButtons(on)
+    },
+    getOrbitButtons() {
+      return pointers?.buttons ? [...pointers.buttons] : []
+    },
+    nudgeOrbit(dx, dy) {
+      camera.alpha -= dx / 480
+      camera.beta = Math.min(camera.upperBetaLimit ?? Math.PI, Math.max(camera.lowerBetaLimit ?? 0.04, camera.beta - dy / 480))
     },
     addShadowCaster(mesh) {
       shadows?.addShadowCaster(mesh)
