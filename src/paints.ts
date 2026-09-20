@@ -143,6 +143,14 @@ export type SimFeel = {
   iterations: number
   gloss: number
   rest: number
+  /** Kinematic-ish viscosity. Water ~0.1, tar ~5. Drives resistance, drip, mix rate. */
+  viscosity: number
+  /** 0 = energetic FLIP, 1 = heavily PIC (paste that holds a mound). */
+  picBlend: number
+  /** Tray-slope drainage. High for thin paint, near-zero for tar. */
+  slope: number
+  /** Static friction on the porcelain once paint is almost still. */
+  friction: number
 }
 
 function lerp(a: number, b: number, t: number): number {
@@ -151,14 +159,19 @@ function lerp(a: number, b: number, t: number): number {
 
 export function simFromViscosity(t: number): SimFeel {
   const x = Math.min(1, Math.max(0, t))
+  const x2 = x * x
   return {
-    damping: lerp(0.91, 0.994, x),
-    gravity: lerp(1.7, 0.26, x),
-    cohesion: lerp(0.14, 0.88, x),
-    mix: lerp(0.28, 0.016, x),
-    iterations: Math.round(lerp(4, 10, x)),
-    gloss: lerp(0.4, 0.96, x),
-    rest: lerp(0.8, 0.66, x),
+    damping: lerp(0.82, 0.988, x),
+    gravity: lerp(2.6, 0.18, x),
+    cohesion: lerp(0.1, 1.22, x),
+    mix: lerp(0.62, 0.01, x),
+    iterations: Math.round(lerp(2, 12, x)),
+    gloss: lerp(0.34, 0.98, x),
+    rest: lerp(0.74, 0.9, x),
+    viscosity: lerp(0.09, 5.4, x2 * 0.35 + x * 0.65),
+    picBlend: lerp(0.42, 0.96, x),
+    slope: lerp(1.15, 0.012, x),
+    friction: lerp(0.55, 6.4, x),
   }
 }
 

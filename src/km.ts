@@ -248,6 +248,22 @@ export function writePigmentSlot(k: Float32Array, s: Float32Array, resid: Float3
 
 const scratchSpec = new Float32Array(BANDS)
 
+/**
+ * Finite-thickness KM reflectance over a substrate Rg.
+ * d → 0 returns the tray; d → ∞ returns the infinite masstone.
+ */
+export function kmFiniteReflectance(K: number, S: number, thickness: number, Rg = 0.84): number {
+  const s = Math.max(S, EPS)
+  const a = (Math.max(K, 0) + s) / s
+  const b = Math.sqrt(Math.max(a * a - 1, 0))
+  const sd = s * Math.max(thickness, 0)
+  if (sd < 1e-5 || b < 1e-8) return clamp(Rg, EPS, 1 - EPS)
+  const e2 = Math.exp(2 * Math.min(b * sd, 40))
+  const coth = (e2 + 1) / Math.max(e2 - 1, EPS)
+  const R = (1 - Rg * (a - b * coth)) / (a - Rg + b * coth)
+  return clamp(R, EPS, 1 - EPS)
+}
+
 /** Convert accumulated K·mass / S·mass at a heightfield cell into display sRGB. */
 export function accumulatedKSToSrgb(
   kAcc: Float32Array,
@@ -255,18 +271,25 @@ export function accumulatedKSToSrgb(
   residAcc: Float32Array,
   cell: number,
   mass: number,
+  thickness = 0.28,
+  substrate = 0.84,
 ): [number, number, number] {
   const inv = 1 / Math.max(mass, EPS)
   const o = cell * BANDS
+  const optical = Math.max(thickness, 0) * 22
+  const thick = thickness >= 0.2
   for (let i = 0; i < BANDS; i++) {
-    scratchSpec[i] = kmReflectance((kAcc[o + i] ?? 0) * inv, (sAcc[o + i] ?? 0) * inv)
+    const K = (kAcc[o + i] ?? 0) * inv
+    const S = (sAcc[o + i] ?? 0) * inv
+    scratchSpec[i] = thick ? kmReflectance(K, S) : kmFiniteReflectance(K, S, optical, substrate)
   }
   const lin = spectrumToLinearRgb(scratchSpec)
   const r = cell * 3
+  const fade = clamp(thickness / (thickness + 0.045), 0, 1)
   return linearToSrgbRgb([
-    lin[0] + (residAcc[r] ?? 0) * inv,
-    lin[1] + (residAcc[r + 1] ?? 0) * inv,
-    lin[2] + (residAcc[r + 2] ?? 0) * inv,
+    lin[0] + (residAcc[r] ?? 0) * inv * fade,
+    lin[1] + (residAcc[r + 1] ?? 0) * inv * fade,
+    lin[2] + (residAcc[r + 2] ?? 0) * inv * fade,
   ])
 }
 

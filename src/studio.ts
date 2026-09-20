@@ -69,15 +69,16 @@ export function detectSoftware(engine: Engine): boolean {
 
 function porcelain(scene: Scene, name: string): PBRMaterial {
   const mat = new PBRMaterial(name, scene)
-  mat.albedoColor = new Color3(0.94, 0.91, 0.86)
-  mat.metallic = 0.02
-  mat.roughness = 0.34
-  mat.environmentIntensity = 0.9
+  mat.albedoColor = new Color3(0.93, 0.9, 0.84)
+  mat.metallic = 0.04
+  mat.roughness = 0.28
+  mat.environmentIntensity = 1.05
   mat.enableSpecularAntiAliasing = true
   mat.backFaceCulling = false
   mat.clearCoat.isEnabled = true
-  mat.clearCoat.intensity = 0.22
-  mat.clearCoat.roughness = 0.38
+  mat.clearCoat.intensity = 0.38
+  mat.clearCoat.roughness = 0.22
+  mat.indexOfRefraction = 1.52
   return mat
 }
 
@@ -93,60 +94,62 @@ function attachCinematicLook(scene: Scene, camera: ArcRotateCamera, software: bo
     return
   }
   const pipe = new DefaultRenderingPipeline('macroLook', true, scene, [camera])
-  pipe.fxaaEnabled = software
+  pipe.fxaaEnabled = true
   pipe.samples = software ? 1 : 4
   pipe.sharpenEnabled = !software
   if (pipe.sharpen) {
-    pipe.sharpen.edgeAmount = 0.18
+    pipe.sharpen.edgeAmount = 0.1
     pipe.sharpen.colorAmount = 1
   }
 
   pipe.bloomEnabled = true
-  pipe.bloomThreshold = 0.93
-  pipe.bloomWeight = 0.07
-  pipe.bloomKernel = 24
-  pipe.bloomScale = software ? 0.35 : 0.5
+  pipe.bloomThreshold = 0.88
+  pipe.bloomWeight = 0.09
+  pipe.bloomKernel = 32
+  pipe.bloomScale = software ? 0.35 : 0.55
 
   pipe.imageProcessingEnabled = true
   const ip = pipe.imageProcessing
   if (ip) {
     ip.toneMappingEnabled = true
     ip.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES
-    ip.contrast = 1.16
-    ip.exposure = 0.94
+    ip.contrast = 1.1
+    ip.exposure = 1.02
     ip.ditheringEnabled = true
     ip.vignetteEnabled = true
-    ip.vignetteWeight = 1.35
-    ip.vignetteStretch = 0.28
-    ip.vignetteColor = new Color4(0.07, 0.05, 0.04, 0)
+    ip.vignetteWeight = 1.05
+    ip.vignetteStretch = 0.2
+    ip.vignetteColor = new Color4(0.06, 0.045, 0.035, 0)
     ip.vignetteCameraFov = camera.fov
     const curves = new ColorCurves()
-    curves.globalSaturation = 6
-    curves.midtonesSaturation = 5
-    curves.highlightsSaturation = -10
-    curves.highlightsExposure = -14
-    curves.shadowsSaturation = 4
-    curves.globalExposure = 0
+    curves.globalSaturation = 4
+    curves.midtonesSaturation = 3
+    curves.highlightsSaturation = -6
+    curves.highlightsExposure = -8
+    curves.shadowsSaturation = 2
+    curves.globalExposure = 2
     ip.colorCurves = curves
     ip.colorCurvesEnabled = true
   }
 
   pipe.grainEnabled = true
-  pipe.grain.intensity = software ? 7.2 : 4.8
-  pipe.grain.animated = true
+  pipe.grain.intensity = software ? 3.4 : 2.1
+  pipe.grain.animated = false
 
-  pipe.chromaticAberrationEnabled = true
-  pipe.chromaticAberration.aberrationAmount = software ? 6 : 12
-  pipe.chromaticAberration.radialIntensity = 0.45
-  pipe.chromaticAberration.direction = new Vector2(0.92, 0.18)
+  pipe.chromaticAberrationEnabled = !software
+  if (pipe.chromaticAberrationEnabled) {
+    pipe.chromaticAberration.aberrationAmount = 4.5
+    pipe.chromaticAberration.radialIntensity = 0.28
+    pipe.chromaticAberration.direction = new Vector2(0.92, 0.18)
+  }
 
   if (!software) {
     try {
-      pipe.depthOfFieldBlurLevel = DepthOfFieldEffectBlurLevel.Medium
+      pipe.depthOfFieldBlurLevel = DepthOfFieldEffectBlurLevel.Low
       pipe.depthOfFieldEnabled = true
-      pipe.depthOfField.fStop = 2.4
-      pipe.depthOfField.focalLength = 85
-      pipe.depthOfField.lensSize = 50
+      pipe.depthOfField.fStop = 3.4
+      pipe.depthOfField.focalLength = 70
+      pipe.depthOfField.lensSize = 42
       pipe.depthOfField.focusDistance = camera.radius * 1000
     } catch {
       pipe.depthOfFieldEnabled = false
@@ -222,18 +225,18 @@ export function createStudio(canvas: HTMLCanvasElement): {
   applyOrbitButtons(false)
 
   const key = new DirectionalLight('key', KEY_DIR, scene)
-  key.intensity = software ? 1.05 : 1.22
-  key.diffuse = new Color3(1, 0.96, 0.9)
+  key.intensity = software ? 1.12 : 1.38
+  key.diffuse = new Color3(1, 0.97, 0.91)
   const fill = new HemisphericLight('fill', new Vector3(0.15, 1, 0.2), scene)
-  fill.intensity = 0.28
-  fill.diffuse = new Color3(0.92, 0.9, 0.88)
-  fill.groundColor = new Color3(0.32, 0.24, 0.18)
+  fill.intensity = 0.34
+  fill.diffuse = new Color3(0.94, 0.92, 0.9)
+  fill.groundColor = new Color3(0.36, 0.28, 0.2)
   const windowLight = new PointLight('window', new Vector3(4.6, 3.4, -2.4), scene)
-  windowLight.intensity = software ? 10 : 16
-  windowLight.diffuse = new Color3(0.72, 0.84, 1)
+  windowLight.intensity = software ? 12 : 20
+  windowLight.diffuse = new Color3(0.74, 0.86, 1)
   const bounce = new DirectionalLight('bounce', new Vector3(0.12, 0.95, -0.18), scene)
-  bounce.intensity = 0.18
-  bounce.diffuse = new Color3(0.62, 0.48, 0.34)
+  bounce.intensity = 0.24
+  bounce.diffuse = new Color3(0.68, 0.52, 0.36)
 
   const table = MeshBuilder.CreateTorus(
     'table',
@@ -327,13 +330,17 @@ export function createStudio(canvas: HTMLCanvasElement): {
   windowPane.isPickable = false
 
   if (software) {
-    scene.environmentIntensity = 0.55
+    scene.environmentIntensity = 0.62
   } else {
-    const probe = new ReflectionProbe('studioProbe', 128, scene, false)
-    probe.refreshRate = 24
-    probe.renderList = [wall, cyc, softbox, windowPane, table, dishBody, rim, pit]
-    scene.environmentTexture = probe.cubeTexture
-    scene.environmentIntensity = 0.88
+    try {
+      const probe = new ReflectionProbe('studioProbe', 256, scene, false)
+      probe.refreshRate = 18
+      probe.renderList = [wall, cyc, softbox, windowPane, table, dishBody, rim, pit]
+      scene.environmentTexture = probe.cubeTexture
+      scene.environmentIntensity = 1.05
+    } catch {
+      scene.environmentIntensity = 0.7
+    }
   }
 
   let shadows: ShadowGenerator | null = null
@@ -356,8 +363,8 @@ export function createStudio(canvas: HTMLCanvasElement): {
     try {
       scene.enableDepthRenderer(camera, false)
       const ssao = new SSAO2RenderingPipeline('ssao', scene, 0.5, [camera])
-      ssao.totalStrength = 0.62
-      ssao.radius = 1.05
+      ssao.totalStrength = 0.48
+      ssao.radius = 0.92
       ssao.expensiveBlur = true
     } catch {
       /* missing samples */
@@ -368,8 +375,8 @@ export function createStudio(canvas: HTMLCanvasElement): {
       ssr.selfCollisionNumSkip = 2
       ssr.enableAutomaticThicknessComputation = false
       ssr.environmentTexture = null
-      ssr.strength = 0.28
-      ssr.reflectionSpecularFalloffExponent = 5
+      ssr.strength = 0.36
+      ssr.reflectionSpecularFalloffExponent = 4.2
     } catch {
       /* SSR not available */
     }
