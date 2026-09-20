@@ -216,8 +216,8 @@ function waitFrames(n: number): Promise<void> {
 }
 
 async function sampleFrame(): Promise<{ mean: [number, number, number]; variance: number; px: number }> {
-  const sw = 48
-  const sh = 48
+  const sw = 80
+  const sh = 80
   const rw = engine.getRenderWidth()
   const rh = engine.getRenderHeight()
   const x = Math.max(0, Math.floor(rw / 2 - sw / 2))
