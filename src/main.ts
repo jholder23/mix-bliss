@@ -1,4 +1,4 @@
-import { PointerEventTypes, Vector3 } from '@babylonjs/core'
+import { Matrix, PointerEventTypes, Vector3 } from '@babylonjs/core'
 import { MixAudio } from './audio'
 import { PaintFluid } from './fluid'
 import { SHOTS, createStudio } from './studio'
@@ -43,7 +43,7 @@ try {
   throw err
 }
 
-const { engine, scene, camera, tray, software, lookTo, setToolGhost, setLeftOrbit } = studio
+const { engine, scene, camera, software, lookTo, setToolGhost, setLeftOrbit } = studio
 const audio = new MixAudio()
 let viscosity = 0.72
 let feel = simFromViscosity(viscosity)
@@ -140,13 +140,11 @@ function renderShots(): void {
 }
 
 function pickTray(px: number, py: number): Vector3 | null {
-  const hit = scene.pick(px, py, (m) => m === tray || m === fluid.mesh)
-  if (hit?.hit && hit.pickedPoint) return hit.pickedPoint.clone()
-  const ray = scene.createPickingRay(px, py, null, camera)
+  const ray = scene.createPickingRay(px, py, Matrix.Identity(), camera)
   const n = new Vector3(0, 1, 0)
   const denom = Vector3.Dot(ray.direction, n)
   if (Math.abs(denom) < 1e-5) return null
-  const dist = Vector3.Dot(new Vector3(0, 0.08, 0).subtract(ray.origin), n) / denom
+  const dist = Vector3.Dot(new Vector3(0, 0.12, 0).subtract(ray.origin), n) / denom
   if (dist < 0) return null
   return ray.origin.add(ray.direction.scale(dist))
 }
@@ -235,15 +233,6 @@ scene.onBeforeRenderObservable.add(() => {
   const dt = Math.min(0.033, engine.getDeltaTime() / 1000)
   fluid.step(dt)
   fluid.setGloss(feel.gloss)
-  fluid.setLights(
-    new Vector3(-0.35, -1.15, -0.28),
-    new Vector3(0.2, -1, 0.35),
-    new Vector3(0.55, 0.35, -0.45),
-  )
-  const mat = fluid.mesh.material
-  if (mat && 'setVector3' in mat) {
-    ;(mat as { setVector3: (n: string, v: Vector3) => void }).setVector3('cameraPosition', camera.position)
-  }
 })
 
 engine.runRenderLoop(() => scene.render())

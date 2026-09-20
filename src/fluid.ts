@@ -4,6 +4,7 @@ import {
   Mesh,
   MeshBuilder,
   RawTexture,
+  StandardMaterial,
   Texture,
   Vector3,
   VertexBuffer,
@@ -98,11 +99,11 @@ export class PaintFluid {
     this.map.wrapU = Texture.CLAMP_ADDRESSMODE
     this.map.wrapV = Texture.CLAMP_ADDRESSMODE
 
-    const mat = createPaintMaterial(scene)
-    mat.setTexture('paintMap', this.map)
-    mat.setFloat('trayR', TRAY_R)
-    mat.setFloat('heightScale', HEIGHT_SCALE)
+    const mat = createPaintMaterial(scene, software)
+    mat.diffuseTexture = this.map
     this.mesh.material = mat
+    this.mesh.isPickable = false
+    this.mesh.refreshBoundingInfo()
   }
 
   setFeel(feel: SimFeel): void {
@@ -404,25 +405,17 @@ export class PaintFluid {
       v[i + 1] = trayHeight(x, z) + this.sampleHeight(x, z)
     }
     this.mesh.updateVerticesData(VertexBuffer.PositionKind, v, false)
+    this.mesh.createNormals(true)
     this.mesh.refreshBoundingInfo()
   }
 
   setGloss(gloss: number): void {
     const mat = this.mesh.material
-    if (mat && 'setFloat' in mat) {
-      ;(mat as ReturnType<typeof createPaintMaterial>).setFloat('gloss', gloss)
+    if (mat instanceof StandardMaterial) {
+      mat.specularPower = 36 + gloss * 140
+      mat.specularColor = Color3.Lerp(new Color3(0.4, 0.4, 0.4), new Color3(1, 0.98, 0.94), gloss)
     }
   }
 
-  setLights(key: Vector3, fill: Vector3, windowDir: Vector3): void {
-    const mat = this.mesh.material as ReturnType<typeof createPaintMaterial> | null
-    if (!mat || !('setVector3' in mat)) return
-    mat.setVector3('keyDir', key)
-    mat.setColor3('keyCol', new Color3(1.05, 1.0, 0.95))
-    mat.setVector3('fillDir', fill)
-    mat.setColor3('fillCol', new Color3(0.55, 0.62, 0.72))
-    mat.setVector3('windowDir', windowDir)
-    mat.setColor3('floorCol', new Color3(0.55, 0.48, 0.38))
-    mat.setVector3('cameraPosition', Vector3.Zero())
-  }
+  setLights(_key: Vector3, _fill: Vector3, _windowDir: Vector3): void {}
 }
