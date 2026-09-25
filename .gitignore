@@ -22,9 +22,11 @@ CompileCommands.json
 *_BuiltData.uasset
 *.log
 
-# Do not resurrect a web app at the repository root
-/node_modules/
-/dist/
+# Rejected WebGL — not the product (root leftovers AND any web/ tree)
+web/
+_legacy_web/node_modules/
+node_modules/
+dist/
 /src/
 /index.html
 /package.json
@@ -37,11 +39,6 @@ CompileCommands.json
 /playwright-report/
 /playwright/.cache/
 /e2e/
-
-# Mobile web app lives in web/
-web/node_modules/
-web/dist/
-web/.vite/
 
 .DS_Store
 Thumbs.db
