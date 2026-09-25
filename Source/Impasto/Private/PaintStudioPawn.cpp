@@ -1,6 +1,8 @@
 #include "PaintStudioPawn.h"
 #include "PaintSimComponent.h"
 #include "PaintMaterials.h"
+#include "ImpastoPlatform.h"
+#include "ImpastoPlayerController.h"
 #include "Camera/CameraComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/RectLightComponent.h"
@@ -13,6 +15,7 @@
 #include "InputMappingContext.h"
 #include "InputModifiers.h"
 #include "GameFramework/PlayerController.h"
+#include "InputCoreTypes.h"
 #include "Engine/StaticMesh.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Engine/LocalPlayer.h"
@@ -29,9 +32,9 @@ APaintStudioPawn::APaintStudioPawn()
 
 	Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Overhead"));
 	Camera->SetupAttachment(Root);
-	Camera->SetRelativeLocation(FVector(0.f, 0.f, 56.f));
+	Camera->SetRelativeLocation(FVector(0.f, 0.f, ImpastoIsMobileTarget() ? 52.f : 56.f));
 	Camera->SetRelativeRotation(FRotator(-90.f, -90.f, 0.f));
-	Camera->SetFieldOfView(24.f);
+	Camera->SetFieldOfView(ImpastoIsMobileTarget() ? 32.f : 24.f);
 	Camera->bConstrainAspectRatio = false;
 	Camera->SetProjectionMode(ECameraProjectionMode::Perspective);
 
@@ -54,6 +57,7 @@ APaintStudioPawn::APaintStudioPawn()
 	Knife->SetRelativeScale3D(FVector(0.08f, 0.016f, 0.0014f));
 	Knife->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	Knife->SetCastShadow(true);
+	Knife->SetVisibility(false);
 
 	PaintSurface = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("PaintSurface"));
 	PaintSurface->SetupAttachment(Root);
@@ -130,13 +134,28 @@ void APaintStudioPawn::ApplyStudioLighting()
 	S.bOverride_ColorSaturation = true;
 	S.ColorSaturation = FVector4(1.06f, 1.05f, 1.04f, 1.f);
 	S.bOverride_DynamicGlobalIlluminationMethod = true;
-	S.DynamicGlobalIlluminationMethod = EDynamicGlobalIlluminationMethod::Lumen;
 	S.bOverride_ReflectionMethod = true;
-	S.ReflectionMethod = EReflectionMethod::Lumen;
-	S.bOverride_LumenFinalGatherQuality = true;
-	S.LumenFinalGatherQuality = 1.5f;
 	S.bOverride_AmbientOcclusionIntensity = true;
-	S.AmbientOcclusionIntensity = 0.55f;
+	if (ImpastoIsMobileTarget())
+	{
+		S.DynamicGlobalIlluminationMethod = EDynamicGlobalIlluminationMethod::None;
+		S.ReflectionMethod = EReflectionMethod::ScreenSpace;
+		S.bOverride_LumenFinalGatherQuality = false;
+		S.AmbientOcclusionIntensity = 0.4f;
+		if (Sky)
+		{
+			Sky->bRealTimeCapture = false;
+			Sky->SetIntensity(0.28f);
+		}
+	}
+	else
+	{
+		S.DynamicGlobalIlluminationMethod = EDynamicGlobalIlluminationMethod::Lumen;
+		S.ReflectionMethod = EReflectionMethod::Lumen;
+		S.bOverride_LumenFinalGatherQuality = true;
+		S.LumenFinalGatherQuality = 1.5f;
+		S.AmbientOcclusionIntensity = 0.55f;
+	}
 }
 
 void APaintStudioPawn::BeginPlay()
@@ -161,6 +180,11 @@ void APaintStudioPawn::BeginPlay()
 		Knife->SetMaterial(0, Steel);
 	}
 	Sim->SetOilMaterial(FPaintMaterials::GetOil());
+	ApplyStudioLighting();
+	if (Knife)
+	{
+		Knife->SetVisibility(bScraperEnabled);
+	}
 
 	if (APlayerController* PC = Cast<APlayerController>(GetController()))
 	{
@@ -202,6 +226,7 @@ void APaintStudioPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 	BlankAction->ValueType = EInputActionValueType::Boolean;
 
 	Mapping->MapKey(PrimaryAction, EKeys::LeftMouseButton);
+	Mapping->MapKey(PrimaryAction, EKeys::Touch);
 	Mapping->MapKey(DumpAction, EKeys::G);
 	Mapping->MapKey(BlankAction, EKeys::R);
 
@@ -228,11 +253,22 @@ void APaintStudioPawn::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+	if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	{
+		if (bPrimaryDown && !IsPrimaryHeld(PC))
+		{
+			OnPrimaryCompleted();
+		}
+	}
+
 	FVector CursorWorld;
 	if (CursorOnTray(CursorWorld))
 	{
 		const FVector Delta = bPrimaryDown ? (CursorWorld - LastWorld) : FVector::ZeroVector;
-		UpdateKnifeVisual(CursorWorld, Delta);
+		if (bScraperEnabled)
+		{
+			UpdateKnifeVisual(CursorWorld, Delta);
+		}
 		if (!bPrimaryDown)
 		{
 			LastWorld = CursorWorld;
@@ -267,27 +303,24 @@ void APaintStudioPawn::Tick(float DeltaTime)
 		{
 			SetSize(Sim->GetGlopSize() + 0.1f);
 		}
+		if (PC->WasInputKeyJustPressed(EKeys::K))
+		{
+			SetScraperEnabled(!bScraperEnabled);
+		}
 	}
 }
 
-bool APaintStudioPawn::CursorOnTray(FVector& OutWorld) const
+bool APaintStudioPawn::DeprojectToTray(const APlayerController* PC, float ScreenX, float ScreenY, FVector& OutWorld) const
 {
-	const APlayerController* PC = Cast<APlayerController>(GetController());
-	if (!PC)
+	if (!PC || !Sim)
 	{
 		return false;
 	}
 	FVector Origin;
 	FVector Dir;
-	if (!PC->DeprojectMousePositionToWorld(Origin, Dir))
+	if (!PC->DeprojectScreenPositionToWorld(ScreenX, ScreenY, Origin, Dir))
 	{
-		float TouchX, TouchY;
-		bool bPressed = false;
-		PC->GetInputTouchState(ETouchIndex::Touch1, TouchX, TouchY, bPressed);
-		if (!bPressed || !PC->DeprojectScreenPositionToWorld(TouchX, TouchY, Origin, Dir))
-		{
-			return false;
-		}
+		return false;
 	}
 	if (FMath::Abs(Dir.Z) < KINDA_SMALL_NUMBER)
 	{
@@ -302,6 +335,78 @@ bool APaintStudioPawn::CursorOnTray(FVector& OutWorld) const
 	OutWorld = Origin + Dir * T;
 	const float Ext = Sim->GetTrayExtent() + 2.f;
 	return FMath::Abs(OutWorld.X) <= Ext && FMath::Abs(OutWorld.Y) <= Ext;
+}
+
+bool APaintStudioPawn::CursorOnTray(FVector& OutWorld) const
+{
+	const APlayerController* PC = Cast<APlayerController>(GetController());
+	if (!PC)
+	{
+		return false;
+	}
+
+	float MouseX = 0.f, MouseY = 0.f;
+	if (PC->GetMousePosition(MouseX, MouseY) && DeprojectToTray(PC, MouseX, MouseY, OutWorld))
+	{
+		return true;
+	}
+
+	for (int32 Touch = 0; Touch < static_cast<int32>(ETouchIndex::CursorPointerIndex); ++Touch)
+	{
+		float TouchX = 0.f, TouchY = 0.f;
+		bool bPressed = false;
+		PC->GetInputTouchState(static_cast<ETouchIndex::Type>(Touch), TouchX, TouchY, bPressed);
+		if (bPressed && DeprojectToTray(PC, TouchX, TouchY, OutWorld))
+		{
+			return true;
+		}
+	}
+
+	FVector Origin, Dir;
+	if (PC->DeprojectMousePositionToWorld(Origin, Dir) && FMath::Abs(Dir.Z) > KINDA_SMALL_NUMBER)
+	{
+		const float TrayZ = Sim->GetTrayZ();
+		const float T = (TrayZ - Origin.Z) / Dir.Z;
+		if (T >= 0.f)
+		{
+			OutWorld = Origin + Dir * T;
+			const float Ext = Sim->GetTrayExtent() + 2.f;
+			return FMath::Abs(OutWorld.X) <= Ext && FMath::Abs(OutWorld.Y) <= Ext;
+		}
+	}
+	return false;
+}
+
+bool APaintStudioPawn::IsPrimaryHeld(const APlayerController* PC) const
+{
+	if (!PC)
+	{
+		return false;
+	}
+	if (PC->IsInputKeyDown(EKeys::LeftMouseButton))
+	{
+		return true;
+	}
+	for (int32 Touch = 0; Touch < static_cast<int32>(ETouchIndex::CursorPointerIndex); ++Touch)
+	{
+		float X, Y;
+		bool bPressed = false;
+		PC->GetInputTouchState(static_cast<ETouchIndex::Type>(Touch), X, Y, bPressed);
+		if (bPressed)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+bool APaintStudioPawn::IsPointerOverHud() const
+{
+	if (const AImpastoPlayerController* PC = Cast<AImpastoPlayerController>(GetController()))
+	{
+		return PC->IsPointerOverMixerHud();
+	}
+	return false;
 }
 
 void APaintStudioPawn::UpdateKnifeVisual(const FVector& WorldPos, const FVector& Delta)
@@ -319,6 +424,10 @@ void APaintStudioPawn::UpdateKnifeVisual(const FVector& WorldPos, const FVector&
 
 void APaintStudioPawn::OnPrimaryStarted()
 {
+	if (IsPointerOverHud())
+	{
+		return;
+	}
 	FVector World;
 	if (!CursorOnTray(World))
 	{
@@ -348,9 +457,9 @@ void APaintStudioPawn::OnPrimaryTriggered()
 	}
 	if (bScraping)
 	{
-		const float Length = 8.f;
-		const float Width = 1.35f + Sim->GetGlopSize() * 0.8f;
-		Sim->ScrapeWorld(World, Delta, Length, Width);
+		const float Length = bScraperEnabled ? 8.f : (2.2f + Sim->GetGlopSize() * 1.1f);
+		const float Width = bScraperEnabled ? (1.35f + Sim->GetGlopSize() * 0.8f) : Length;
+		Sim->ScrapeWorld(World, Delta, Length, Width, bScraperEnabled);
 	}
 	LastWorld = World;
 }
@@ -409,4 +518,13 @@ void APaintStudioPawn::SetViscosity(float T)
 void APaintStudioPawn::SetSize(float T)
 {
 	Sim->SetGlopSize(T);
+}
+
+void APaintStudioPawn::SetScraperEnabled(bool bEnabled)
+{
+	bScraperEnabled = bEnabled;
+	if (Knife)
+	{
+		Knife->SetVisibility(bScraperEnabled);
+	}
 }

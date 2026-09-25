@@ -4,8 +4,8 @@
 
 /** Quadratic B-spline MLS-MPM (Hu et al. SIGGRAPH 2018) with a Newtonian
  *  Tait EOS and Batty–Bridson implicit viscosity. 2D tray: no in-plane gravity.
- *  Paint sleeps dead-still when the knife is up. Tube colors ride on particles
- *  and are never mixed. */
+ *  Paint sleeps dead-still when the finger / knife is up. Tube colors ride on
+ *  particles and are never mixed. */
 class FPaintMPM
 {
 public:
@@ -36,6 +36,8 @@ public:
 		float Width = 1.15f;
 		float Strength = 1.f;
 		bool bActive = false;
+		/** True = fingertip disc. False = palette-knife rectangle. Never dumps color. */
+		bool bRound = true;
 	};
 
 	struct FTubeColor
@@ -51,6 +53,7 @@ public:
 	int32 Glop(float Cx, float Cy, float Radius, const FTubeColor& Color);
 	void Step(float Dt, const FKnife* Knife);
 	void SetFeel(const FFeel& InFeel) { Feel = InFeel; }
+	void SetMobileBudget(bool bInMobile) { bMobileBudget = bInMobile; }
 
 	int32 NumParticles() const { return Count; }
 	bool IsSleeping() const { return bSleeping; }
@@ -67,7 +70,9 @@ public:
 private:
 	void Spawn(float X, float Y, const FTubeColor& InColor);
 	void Advance(float Dt, const FKnife* Knife);
+	void ApplyContact(const FKnife& Knife);
 	void ApplyKnife(const FKnife& Knife);
+	void ApplyRoundSmear(const FKnife& Tool);
 	void ImplicitViscosity(float Dt);
 	void SurfaceTension(float Dt);
 	void GridBoundaries();
@@ -77,6 +82,7 @@ private:
 	int32 Count = 0;
 	bool bSleeping = true;
 	bool bDirty = true;
+	bool bMobileBudget = false;
 	int32 Settle = 0;
 
 	TArray<float> Px, Py, Vx, Vy, Mass;

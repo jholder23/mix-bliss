@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # Pixel-stream Impasto on 127.0.0.1:43171 (HTTP) + :8888 (streamer WS).
+# Optional desktop/Linux helper only. Cloud VMs with no UE editor / no GPU
+# cannot run this. Do not substitute a WebGL preview.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

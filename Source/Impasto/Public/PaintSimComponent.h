@@ -39,7 +39,7 @@ public:
 	void SetOilMaterial(UMaterialInterface* InMaterial);
 
 	int32 GlopWorld(const FVector& WorldPos, float RadiusCm);
-	void ScrapeWorld(const FVector& WorldPos, const FVector& WorldDelta, float LengthCm, float WidthCm);
+	void ScrapeWorld(const FVector& WorldPos, const FVector& WorldDelta, float LengthCm, float WidthCm, bool bScraper);
 	void EndScrape();
 	void BlankTray();
 
@@ -93,7 +93,7 @@ private:
 	float GlopSize = 0.52f;
 	bool bKnifeActive = false;
 
-	static constexpr int32 MeshRes = 160;
+	int32 MeshRes = 160;
 	TArray<FVector> Vertices;
 	TArray<int32> Triangles;
 	TArray<FVector> Normals;

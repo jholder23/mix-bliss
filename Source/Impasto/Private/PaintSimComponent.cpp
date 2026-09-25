@@ -1,5 +1,6 @@
 #include "PaintSimComponent.h"
 #include "PaintMaterials.h"
+#include "ImpastoPlatform.h"
 #include "ProceduralMeshComponent.h"
 
 namespace
@@ -48,6 +49,17 @@ void UPaintSimComponent::BuildTubes()
 void UPaintSimComponent::BeginPlay()
 {
 	Super::BeginPlay();
+	if (ImpastoIsMobileTarget())
+	{
+		MeshRes = 112;
+		Solver.SetMobileBudget(true);
+		const int32 Field = MeshRes * MeshRes;
+		HeightField.SetNumZeroed(Field);
+		ColorW.SetNumZeroed(Field);
+		Cr.SetNumZeroed(Field);
+		Cg.SetNumZeroed(Field);
+		Cb.SetNumZeroed(Field);
+	}
 	if (!OilMaterial)
 	{
 		SetOilMaterial(FPaintMaterials::GetOil());
@@ -119,7 +131,7 @@ int32 UPaintSimComponent::GlopWorld(const FVector& WorldPos, float RadiusCm)
 	return Solver.Glop(Gx, Gy, GridRadius, C);
 }
 
-void UPaintSimComponent::ScrapeWorld(const FVector& WorldPos, const FVector& WorldDelta, float LengthCm, float WidthCm)
+void UPaintSimComponent::ScrapeWorld(const FVector& WorldPos, const FVector& WorldDelta, float LengthCm, float WidthCm, bool bScraper)
 {
 	float Gx, Gy;
 	if (!WorldToGrid(WorldPos, Gx, Gy))
@@ -136,6 +148,7 @@ void UPaintSimComponent::ScrapeWorld(const FVector& WorldPos, const FVector& Wor
 	Knife.Length = (LengthCm / Span) * float(FPaintMPM::Grid);
 	Knife.Width = (WidthCm / Span) * float(FPaintMPM::Grid);
 	Knife.Strength = 1.f;
+	Knife.bRound = !bScraper;
 	Knife.bActive = true;
 	bKnifeActive = true;
 }

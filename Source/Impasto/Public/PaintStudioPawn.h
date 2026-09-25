@@ -13,6 +13,7 @@ class UPaintSimComponent;
 class UProceduralMeshComponent;
 class UInputMappingContext;
 class UInputAction;
+class APlayerController;
 
 UCLASS()
 class IMPASTO_API APaintStudioPawn : public APawn
@@ -34,6 +35,8 @@ public:
 	void BlankTray();
 	void SetViscosity(float T);
 	void SetSize(float T);
+	void SetScraperEnabled(bool bEnabled);
+	bool IsScraperEnabled() const { return bScraperEnabled; }
 
 protected:
 	void OnPrimaryStarted();
@@ -44,6 +47,9 @@ protected:
 
 private:
 	bool CursorOnTray(FVector& OutWorld) const;
+	bool DeprojectToTray(const APlayerController* PC, float ScreenX, float ScreenY, FVector& OutWorld) const;
+	bool IsPrimaryHeld(const APlayerController* PC) const;
+	bool IsPointerOverHud() const;
 	void UpdateKnifeVisual(const FVector& WorldPos, const FVector& Delta);
 	void ApplyStudioLighting();
 
@@ -97,6 +103,7 @@ private:
 
 	bool bPrimaryDown = false;
 	bool bScraping = false;
+	bool bScraperEnabled = false;
 	FVector PressWorld = FVector::ZeroVector;
 	FVector LastWorld = FVector::ZeroVector;
 	FVector BladeDir = FVector(1.f, 0.f, 0.f);

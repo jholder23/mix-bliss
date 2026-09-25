@@ -2,7 +2,7 @@
 	"FileVersion": 3,
 	"EngineAssociation": "5.8",
 	"Category": "Simulation",
-	"Description": "Photoreal top-down oil on a porcelain tray. Palette knife only. No color mixing.",
+	"Description": "Photoreal top-down oil on a porcelain tray. Mobile paint mixer. MLS-MPM oil, tap to glop, drag to smear.",
 	"Modules": [
 		{
 			"Name": "Impasto",
@@ -20,8 +20,8 @@
 		{ "Name": "NiagaraFluids", "Enabled": true },
 		{ "Name": "ProceduralMeshComponent", "Enabled": true },
 		{ "Name": "EnhancedInput", "Enabled": true },
-		{ "Name": "PixelStreaming", "Enabled": true },
-		{ "Name": "PixelStreaming2", "Enabled": true },
+		{ "Name": "PixelStreaming", "Enabled": true, "PlatformAllowList": [ "Win64", "Linux", "Mac" ] },
+		{ "Name": "PixelStreaming2", "Enabled": true, "PlatformAllowList": [ "Win64", "Linux", "Mac" ] },
 		{ "Name": "GeometryProcessing", "Enabled": true }
 	]
 }

@@ -9,5 +9,6 @@ public class ImpastoTarget : TargetRules
 		DefaultBuildSettings = BuildSettingsVersion.Latest;
 		IncludeOrderVersion = EngineIncludeOrderVersion.Latest;
 		ExtraModuleNames.Add("Impasto");
+		// Same game target cooks Windows PIE, Android APK/AAB, and iOS IPA.
 	}
 }

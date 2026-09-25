@@ -11,8 +11,4 @@ class IMPASTO_API AImpastoHUD : public AHUD
 
 public:
 	virtual void DrawHUD() override;
-
-private:
-	void DrawSwatches();
-	void DrawHint();
 };

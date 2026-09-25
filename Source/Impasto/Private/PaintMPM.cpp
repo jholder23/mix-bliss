@@ -174,7 +174,7 @@ void FPaintMPM::Step(float Dt, const FKnife* Knife)
 		Settle = 0;
 		return;
 	}
-	const int32 Sub = bMoving ? 3 : 2;
+	const int32 Sub = bMobileBudget ? (bMoving ? 2 : 1) : (bMoving ? 3 : 2);
 	const float H = FMath::Min(0.02f, Dt / float(Sub));
 	for (int32 S = 0; S < Sub; ++S)
 	{
@@ -296,7 +296,7 @@ void FPaintMPM::Advance(float Dt, const FKnife* Knife)
 
 	if (Knife)
 	{
-		ApplyKnife(*Knife);
+		ApplyContact(*Knife);
 	}
 	ImplicitViscosity(Dt);
 	SurfaceTension(Dt);
@@ -360,6 +360,63 @@ void FPaintMPM::Advance(float Dt, const FKnife* Knife)
 		else if (Ny > float(Grid) - Pad) { Ny = float(Grid) - Pad; Vy[P] = FMath::Min(0.f, Pvy); }
 		Px[P] = Nx;
 		Py[P] = Ny;
+	}
+}
+
+void FPaintMPM::ApplyContact(const FKnife& Knife)
+{
+	if (Knife.bRound)
+	{
+		ApplyRoundSmear(Knife);
+	}
+	else
+	{
+		ApplyKnife(Knife);
+	}
+}
+
+void FPaintMPM::ApplyRoundSmear(const FKnife& Tool)
+{
+	const float Speed = FMath::Sqrt(Tool.Dx * Tool.Dx + Tool.Dy * Tool.Dy);
+	if (Speed < 1e-5f)
+	{
+		return;
+	}
+	const float Tx = Tool.Dx / Speed;
+	const float Ty = Tool.Dy / Speed;
+	const float Radius = FMath::Max(0.55f, FMath::Max(Tool.Width, Tool.Length) * 0.5f);
+	const float Reach = Radius * 1.7f;
+	const float Kvx = Tool.Dx * Tool.Strength;
+	const float Kvy = Tool.Dy * Tool.Strength;
+
+	for (int32 I = 1; I < Nodes - 1; ++I)
+	{
+		for (int32 J = 1; J < Nodes - 1; ++J)
+		{
+			const int32 Idx = I * Nodes + J;
+			if (GMass[Idx] < 1e-5f)
+			{
+				continue;
+			}
+			const float Rx = float(I) - Tool.X;
+			const float Ry = float(J) - Tool.Y;
+			const float Dist = FMath::Sqrt(Rx * Rx + Ry * Ry);
+			if (Dist > Reach)
+			{
+				continue;
+			}
+			const float Fall = Smoothstep(Reach, Radius * 0.32f, Dist);
+			if (Fall <= 0.f)
+			{
+				continue;
+			}
+			const float Mix = FMath::Min(1.f, Fall * 0.9f);
+			GVx[Idx] = GVx[Idx] * (1.f - Mix) + Kvx * Mix;
+			GVy[Idx] = GVy[Idx] * (1.f - Mix) + Kvy * Mix;
+			const float Push = Fall * Speed * 0.4f;
+			GVx[Idx] += Tx * Push;
+			GVy[Idx] += Ty * Push;
+		}
 	}
 }
 
@@ -429,7 +486,7 @@ void FPaintMPM::ImplicitViscosity(float Dt)
 		return;
 	}
 	const float MassMin = 1e-5f;
-	const int32 Iters = Feel.Jacobi;
+	const int32 Iters = bMobileBudget ? FMath::Min(Feel.Jacobi, 10) : Feel.Jacobi;
 	for (int32 It = 0; It < Iters; ++It)
 	{
 		const TArray<float>& SrcX = (It % 2 == 0) ? GVx : GVxB;
