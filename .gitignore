@@ -22,20 +22,25 @@ CompileCommands.json
 *_BuiltData.uasset
 *.log
 
-# Do not resurrect the rejected WebGL prototype
-node_modules/
-dist/
-src/
-index.html
-package.json
-package-lock.json
-vite.config.ts
-tsconfig.json
-public/
-tests/
-test-results/
-playwright-report/
-playwright/.cache/
+# Do not resurrect a web app at the repository root
+/node_modules/
+/dist/
+/src/
+/index.html
+/package.json
+/package-lock.json
+/vite.config.ts
+/tsconfig.json
+/public/
+/tests/
+/test-results/
+/playwright-report/
+/playwright/.cache/
+/e2e/
+
+# Mobile web app lives in web/
+web/node_modules/
+web/dist/
 
 .DS_Store
 Thumbs.db
